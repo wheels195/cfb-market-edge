@@ -21,7 +21,7 @@ export async function GET(request: Request) {
       const recordsProcessed =
         (result.steps.syncEvents?.eventsCreated || 0) +
         (result.steps.syncEvents?.eventsUpdated || 0) +
-        (result.steps.pollOdds?.ticksInserted || 0) +
+        (result.steps.pollOdds?.ticksWritten || 0) +
         (result.steps.runModel?.projectionsGenerated || 0) +
         (result.steps.materializeEdges?.edgesCreated || 0) +
         (result.steps.materializeEdges?.edgesUpdated || 0);
@@ -46,7 +46,7 @@ export async function GET(request: Request) {
           eventsUpdated: result.steps.syncEvents.eventsUpdated,
         } : null,
         pollOdds: result.steps.pollOdds ? {
-          ticksInserted: result.steps.pollOdds.ticksInserted,
+          ticksWritten: result.steps.pollOdds.ticksWritten,
         } : null,
         runModel: result.steps.runModel ? {
           ratingsUpdated: result.steps.runModel.ratingsUpdated,
