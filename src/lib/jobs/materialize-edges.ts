@@ -1005,6 +1005,11 @@ async function upsertEdge(
         adjustment: number;
         alignsWithBet: boolean;
       } | null;
+      sanityGate?: {
+        passed: boolean;
+        adjustmentPoints: number;
+        maxAllowed: number;
+      };
     };
   },
   result: MaterializeEdgesResult
