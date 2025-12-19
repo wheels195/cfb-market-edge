@@ -9,344 +9,373 @@ interface EdgesFeedProps {
   edges: EdgeWithDetails[];
 }
 
+// Group edges by event
+interface GameGroup {
+  eventId: string;
+  homeTeam: string;
+  awayTeam: string;
+  homeAbbrev: string | null;
+  awayAbbrev: string | null;
+  commenceTime: Date;
+  spreadEdges: EdgeWithDetails[];
+  totalEdges: EdgeWithDetails[];
+  bestSpreadEdge: EdgeWithDetails | null;
+  bestTotalEdge: EdgeWithDetails | null;
+  hasQualifying: boolean;
+}
+
+function groupEdgesByGame(edges: EdgeWithDetails[]): GameGroup[] {
+  const groups = new Map<string, GameGroup>();
+
+  for (const edge of edges) {
+    const eventId = edge.event.id;
+
+    if (!groups.has(eventId)) {
+      groups.set(eventId, {
+        eventId,
+        homeTeam: edge.event.home_team_name,
+        awayTeam: edge.event.away_team_name,
+        homeAbbrev: edge.event.home_team_abbrev || null,
+        awayAbbrev: edge.event.away_team_abbrev || null,
+        commenceTime: new Date(edge.event.commence_time),
+        spreadEdges: [],
+        totalEdges: [],
+        bestSpreadEdge: null,
+        bestTotalEdge: null,
+        hasQualifying: false,
+      });
+    }
+
+    const group = groups.get(eventId)!;
+    const explain = edge.explain as { qualifies?: boolean } | null;
+
+    if (explain?.qualifies) {
+      group.hasQualifying = true;
+    }
+
+    if (edge.market_type === 'spread') {
+      group.spreadEdges.push(edge);
+    } else {
+      group.totalEdges.push(edge);
+    }
+  }
+
+  // Find best edge for each market type (highest absolute edge that qualifies, or just highest)
+  for (const group of groups.values()) {
+    // Sort by qualifying first, then by absolute edge
+    const sortEdges = (edges: EdgeWithDetails[]) => {
+      return [...edges].sort((a, b) => {
+        const aQ = (a.explain as { qualifies?: boolean })?.qualifies ? 1 : 0;
+        const bQ = (b.explain as { qualifies?: boolean })?.qualifies ? 1 : 0;
+        if (aQ !== bQ) return bQ - aQ;
+        return Math.abs(b.edge_points) - Math.abs(a.edge_points);
+      });
+    };
+
+    const sortedSpreads = sortEdges(group.spreadEdges);
+    const sortedTotals = sortEdges(group.totalEdges);
+
+    group.spreadEdges = sortedSpreads;
+    group.totalEdges = sortedTotals;
+    group.bestSpreadEdge = sortedSpreads[0] || null;
+    group.bestTotalEdge = sortedTotals[0] || null;
+  }
+
+  // Sort groups: qualifying first, then by best edge
+  return Array.from(groups.values()).sort((a, b) => {
+    if (a.hasQualifying !== b.hasQualifying) return a.hasQualifying ? -1 : 1;
+    const aEdge = Math.max(
+      Math.abs(a.bestSpreadEdge?.edge_points || 0),
+      Math.abs(a.bestTotalEdge?.edge_points || 0)
+    );
+    const bEdge = Math.max(
+      Math.abs(b.bestSpreadEdge?.edge_points || 0),
+      Math.abs(b.bestTotalEdge?.edge_points || 0)
+    );
+    return bEdge - aEdge;
+  });
+}
+
 export function EdgesFeed({ edges }: EdgesFeedProps) {
-  // Separate qualifying and non-qualifying edges
-  const qualifying = edges.filter(e => (e.explain as { qualifies?: boolean })?.qualifies);
-  const other = edges.filter(e => !(e.explain as { qualifies?: boolean })?.qualifies);
+  const gameGroups = groupEdgesByGame(edges);
+  const qualifyingGames = gameGroups.filter(g => g.hasQualifying);
+  const otherGames = gameGroups.filter(g => !g.hasQualifying);
 
   return (
-    <div className="space-y-6">
-      {/* Qualifying Bets Section */}
-      {qualifying.length > 0 && (
-        <div>
-          <div className="flex items-center gap-2 mb-3">
-            <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-            <h2 className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wide">
-              Qualifying Bets ({qualifying.length})
-            </h2>
+    <div className="space-y-8">
+      {/* Qualifying Games */}
+      {qualifyingGames.length > 0 && (
+        <section>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <h2 className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
+                Action ({qualifyingGames.length})
+              </h2>
+            </div>
+            <p className="text-xs text-zinc-500">Edges in profitable range (2.5-5 pts)</p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-            {qualifying.map((edge) => (
-              <EdgeCard key={edge.id} edge={edge} />
+          <div className="space-y-3">
+            {qualifyingGames.map(group => (
+              <GameCard key={group.eventId} group={group} />
             ))}
           </div>
-        </div>
+        </section>
       )}
 
-      {/* Other Edges */}
-      {other.length > 0 && (
-        <div>
-          <h2 className="text-sm font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-3">
-            Other Edges ({other.length})
+      {/* Other Games */}
+      {otherGames.length > 0 && (
+        <section>
+          <h2 className="text-sm font-medium text-zinc-500 dark:text-zinc-400 mb-4">
+            Monitoring ({otherGames.length})
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-            {other.map((edge) => (
-              <EdgeCard key={edge.id} edge={edge} />
+          <div className="space-y-3">
+            {otherGames.map(group => (
+              <GameCard key={group.eventId} group={group} />
             ))}
           </div>
-        </div>
+        </section>
       )}
 
       {edges.length === 0 && (
-        <div className="text-center py-12 text-zinc-500">
-          No edges found
+        <div className="text-center py-16">
+          <p className="text-zinc-400">No edges found</p>
         </div>
       )}
     </div>
   );
 }
 
-function EdgeCard({ edge }: { edge: EdgeWithDetails }) {
+function GameCard({ group }: { group: GameGroup }) {
   const [expanded, setExpanded] = useState(false);
-  const event = edge.event;
-  const commenceTime = new Date(event.commence_time);
-  const timeUntil = formatDistanceToNow(commenceTime, { addSuffix: false });
+  const timeUntil = formatDistanceToNow(group.commenceTime, { addSuffix: false });
 
-  const bookName = edge.sportsbook?.name || 'Unknown';
-  const bookKey = edge.sportsbook?.key || '';
-
-  // Extract explain data
-  const explain = edge.explain as {
-    winProbability?: number;
-    expectedValue?: number;
-    confidenceTier?: string;
-    qualifies?: boolean;
-    warnings?: string[];
-    weather?: { severity: string; factors: string[]; totalAdjustment?: number; spreadAdjustment?: number } | null;
-    lineMovement?: { opening: number | null; current: number | null; movement: number; tickCount: number; sharpSignal: string; sharpDescription: string; alignsWithBet: boolean } | null;
-    injuries?: { adjustment: number; keyInjuries: string[] } | null;
-    playerFactors?: { adjustment: number; factors: string[] } | null;
-    situational?: { netAdjustment: number; factors: Record<string, unknown> } | null;
-    pace?: { adjustment: number; effectiveAdjustment: number } | null;
-  } | null;
-
-  const winProb = explain?.winProbability ?? null;
-  const ev = explain?.expectedValue ?? null;
-  const tier = explain?.confidenceTier ?? 'unknown';
-  const qualifies = explain?.qualifies ?? false;
-  const warnings = explain?.warnings ?? [];
-  const lineMovement = explain?.lineMovement ?? null;
-  const injuries = explain?.injuries ?? null;
-  const weather = explain?.weather ?? null;
-  const situational = explain?.situational ?? null;
-  const pace = explain?.pace ?? null;
-
-  // Has extra details to show?
-  const hasDetails = (lineMovement && lineMovement.tickCount > 0) ||
-                     (injuries && injuries.keyInjuries.length > 0) ||
-                     (weather && weather.severity !== 'none') ||
-                     situational || pace ||
-                     warnings.length > 0;
-
-  // Tier colors
-  const tierConfig: Record<string, { bg: string; text: string; border: string }> = {
-    'very-high': { bg: 'bg-emerald-500', text: 'text-emerald-400', border: 'border-emerald-500/30' },
-    'high': { bg: 'bg-green-500', text: 'text-green-400', border: 'border-green-500/30' },
-    'medium': { bg: 'bg-blue-500', text: 'text-blue-400', border: 'border-blue-500/30' },
-    'low': { bg: 'bg-yellow-500', text: 'text-yellow-400', border: 'border-yellow-500/30' },
-    'skip': { bg: 'bg-zinc-500', text: 'text-zinc-400', border: 'border-zinc-500/30' },
-  };
-  const tierStyle = tierConfig[tier] || tierConfig.skip;
-
-  // Sharp book indicator
-  const isSharpBook = ['pinnacle', 'lowvig'].includes(bookKey);
+  // Get team display names (prefer abbreviations)
+  const away = group.awayAbbrev || group.awayTeam.split(' ').pop() || group.awayTeam;
+  const home = group.homeAbbrev || group.homeTeam.split(' ').pop() || group.homeTeam;
 
   return (
     <div className={`
-      relative rounded-lg overflow-hidden transition-all duration-200
-      ${qualifies
-        ? 'bg-gradient-to-br from-emerald-950/50 to-zinc-900 border border-emerald-500/40 shadow-lg shadow-emerald-500/10'
-        : 'bg-zinc-900/80 border border-zinc-800 hover:border-zinc-700'
+      rounded-xl border transition-all duration-200
+      ${group.hasQualifying
+        ? 'bg-zinc-900 border-emerald-500/30'
+        : 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-700'
       }
     `}>
-      {/* Compact Header */}
-      <div className="p-3 pb-2">
-        {/* Top row: Teams + Time */}
-        <div className="flex items-start justify-between gap-2 mb-2">
-          <Link
-            href={`/events/${event.id}`}
-            className="flex-1 min-w-0 group"
-          >
-            <div className="font-semibold text-zinc-100 text-sm truncate group-hover:text-blue-400 transition-colors">
-              {event.away_team_abbrev || event.away_team_name?.split(' ').pop()} @ {event.home_team_abbrev || event.home_team_name?.split(' ').pop()}
-            </div>
-            <div className="text-[11px] text-zinc-500">
-              {format(commenceTime, 'EEE h:mma')} · {timeUntil}
-            </div>
+      {/* Game Header */}
+      <div className="px-5 py-4">
+        <div className="flex items-center justify-between mb-4">
+          <Link href={`/events/${group.eventId}`} className="group">
+            <h3 className="text-lg font-semibold text-zinc-100 group-hover:text-white transition-colors">
+              {away} <span className="text-zinc-500 font-normal">@</span> {home}
+            </h3>
+            <p className="text-sm text-zinc-500">
+              {format(group.commenceTime, 'EEE, MMM d · h:mm a')} <span className="text-zinc-600">·</span> {timeUntil}
+            </p>
           </Link>
 
-          {/* Badges */}
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${tierStyle.bg} text-white`}>
-              {tier === 'very-high' ? 'A+' : tier === 'high' ? 'A' : tier === 'medium' ? 'B' : tier === 'low' ? 'C' : 'D'}
+          {group.hasQualifying && (
+            <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              Qualifying
             </span>
-            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-              edge.market_type === 'spread'
-                ? 'bg-violet-500/20 text-violet-300'
-                : 'bg-amber-500/20 text-amber-300'
-            }`}>
-              {edge.market_type === 'spread' ? 'SPR' : 'TOT'}
-            </span>
-          </div>
+          )}
         </div>
 
-        {/* Main Content: Edge + Bet */}
-        <div className="flex items-center gap-3 mb-2">
-          {/* Edge Value */}
-          <div className={`text-2xl font-black tracking-tight ${
-            qualifies ? 'text-emerald-400' : tierStyle.text
-          }`}>
-            {edge.edge_points > 0 ? '+' : ''}{edge.edge_points.toFixed(1)}
-          </div>
+        {/* Best Edges Row */}
+        <div className="grid grid-cols-2 gap-4">
+          {/* Spread */}
+          <EdgeSummary
+            label="Spread"
+            edge={group.bestSpreadEdge}
+            allEdges={group.spreadEdges}
+            expanded={expanded}
+          />
 
-          {/* Recommended Bet */}
-          <div className="flex-1 min-w-0">
-            <div className="text-xs text-zinc-500 mb-0.5">Bet</div>
-            <div className="font-semibold text-zinc-100 text-sm truncate">
-              {edge.recommended_bet_label}
-            </div>
-          </div>
+          {/* Total */}
+          <EdgeSummary
+            label="Total"
+            edge={group.bestTotalEdge}
+            allEdges={group.totalEdges}
+            expanded={expanded}
+          />
         </div>
-
-        {/* Stats Row */}
-        <div className="flex items-center gap-4 text-xs">
-          {/* Win Prob */}
-          <div>
-            <span className="text-zinc-500">Win </span>
-            <span className={winProb && winProb >= 55 ? 'text-green-400 font-semibold' : 'text-zinc-300'}>
-              {winProb !== null ? `${winProb}%` : '—'}
-            </span>
-          </div>
-
-          {/* EV */}
-          <div>
-            <span className="text-zinc-500">EV </span>
-            <span className={ev && ev > 0 ? 'text-green-400 font-semibold' : ev && ev < 0 ? 'text-red-400' : 'text-zinc-300'}>
-              {ev !== null ? `${ev > 0 ? '+' : ''}$${ev.toFixed(0)}` : '—'}
-            </span>
-          </div>
-
-          {/* Book */}
-          <div className="ml-auto flex items-center gap-1">
-            {isSharpBook && (
-              <span className="text-[9px] px-1 py-0.5 rounded bg-orange-500/20 text-orange-400 font-medium">
-                SHARP
-              </span>
-            )}
-            <span className="text-zinc-400">{bookName}</span>
-          </div>
-        </div>
-
-        {/* Line Movement Indicator (compact) */}
-        {lineMovement && lineMovement.sharpSignal !== 'neutral' && (
-          <div className={`mt-2 flex items-center gap-1.5 text-[11px] ${
-            lineMovement.alignsWithBet ? 'text-green-400' : 'text-amber-400'
-          }`}>
-            <span className="font-medium">
-              {lineMovement.alignsWithBet ? '✓' : '⚠'} Sharp money {lineMovement.sharpSignal}
-            </span>
-            <span className="text-zinc-500">
-              {lineMovement.opening} → {lineMovement.current}
-            </span>
-          </div>
-        )}
       </div>
 
-      {/* Expandable Details */}
-      {hasDetails && (
-        <>
-          <button
-            onClick={() => setExpanded(!expanded)}
-            className="w-full px-3 py-1.5 flex items-center justify-center gap-1 text-[11px] text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50 transition-colors border-t border-zinc-800"
+      {/* Expand Toggle */}
+      {(group.spreadEdges.length > 1 || group.totalEdges.length > 1) && (
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="w-full px-5 py-2.5 flex items-center justify-center gap-2 text-xs text-zinc-500 hover:text-zinc-300 border-t border-zinc-800/50 transition-colors"
+        >
+          <span>
+            {expanded ? 'Hide' : 'Compare'} {group.spreadEdges.length + group.totalEdges.length} books
+          </span>
+          <svg
+            className={`w-3.5 h-3.5 transition-transform ${expanded ? 'rotate-180' : ''}`}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
           >
-            <span>{expanded ? 'Hide' : 'Show'} details</span>
-            <svg
-              className={`w-3 h-3 transition-transform ${expanded ? 'rotate-180' : ''}`}
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-            {warnings.length > 0 && !expanded && (
-              <span className="ml-1 px-1 py-0.5 rounded bg-amber-500/20 text-amber-400 text-[9px] font-medium">
-                {warnings.length}
-              </span>
-            )}
-          </button>
-
-          {expanded && (
-            <div className="px-3 pb-3 space-y-2 border-t border-zinc-800 bg-zinc-950/50">
-              {/* Market vs Model */}
-              <div className="grid grid-cols-2 gap-2 pt-2">
-                <div>
-                  <div className="text-[10px] text-zinc-500 uppercase tracking-wide">Market</div>
-                  <div className="text-sm font-medium text-zinc-200">
-                    {edge.market_type === 'spread'
-                      ? formatSpread(edge.market_spread_home || 0)
-                      : edge.market_total_points
-                    }
-                  </div>
-                </div>
-                <div>
-                  <div className="text-[10px] text-zinc-500 uppercase tracking-wide">Model</div>
-                  <div className="text-sm font-medium text-zinc-200">
-                    {edge.market_type === 'spread'
-                      ? formatSpread(edge.model_spread_home || 0)
-                      : edge.model_total_points
-                    }
-                  </div>
-                </div>
-              </div>
-
-              {/* Line Movement Details */}
-              {lineMovement && lineMovement.tickCount > 0 && (
-                <div className="py-2 border-t border-zinc-800/50">
-                  <div className="text-[10px] text-zinc-500 uppercase tracking-wide mb-1">Line Movement</div>
-                  <div className="text-xs text-zinc-300">
-                    <span className="font-mono">{lineMovement.opening} → {lineMovement.current}</span>
-                    <span className="text-zinc-500 ml-2">({lineMovement.tickCount} updates)</span>
-                  </div>
-                  {lineMovement.sharpSignal !== 'neutral' && (
-                    <div className={`text-xs mt-1 ${lineMovement.alignsWithBet ? 'text-green-400' : 'text-amber-400'}`}>
-                      {lineMovement.sharpDescription}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Situational Factors */}
-              {situational && situational.netAdjustment !== 0 && (
-                <div className="py-2 border-t border-zinc-800/50">
-                  <div className="text-[10px] text-zinc-500 uppercase tracking-wide mb-1">Situational</div>
-                  <div className="text-xs text-zinc-300">
-                    Adjustment: <span className={situational.netAdjustment > 0 ? 'text-green-400' : 'text-red-400'}>
-                      {situational.netAdjustment > 0 ? '+' : ''}{situational.netAdjustment.toFixed(1)} pts
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {/* Pace */}
-              {pace && pace.effectiveAdjustment !== 0 && (
-                <div className="py-2 border-t border-zinc-800/50">
-                  <div className="text-[10px] text-zinc-500 uppercase tracking-wide mb-1">Pace</div>
-                  <div className="text-xs text-zinc-300">
-                    Total adjustment: <span className={pace.effectiveAdjustment > 0 ? 'text-green-400' : 'text-red-400'}>
-                      {pace.effectiveAdjustment > 0 ? '+' : ''}{pace.effectiveAdjustment.toFixed(1)} pts
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {/* Weather */}
-              {weather && weather.severity !== 'none' && (
-                <div className="py-2 border-t border-zinc-800/50">
-                  <div className="text-[10px] text-zinc-500 uppercase tracking-wide mb-1">
-                    Weather <span className="text-blue-400">({weather.severity})</span>
-                  </div>
-                  <div className="text-xs text-zinc-300 space-y-0.5">
-                    {weather.factors.slice(0, 2).map((f, i) => (
-                      <div key={i}>{f}</div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Injuries */}
-              {injuries && injuries.keyInjuries.length > 0 && (
-                <div className="py-2 border-t border-zinc-800/50">
-                  <div className="text-[10px] text-zinc-500 uppercase tracking-wide mb-1">
-                    Injuries <span className="text-red-400">({injuries.adjustment > 0 ? '+' : ''}{injuries.adjustment})</span>
-                  </div>
-                  <div className="text-xs text-zinc-300 space-y-0.5">
-                    {injuries.keyInjuries.slice(0, 3).map((inj, i) => (
-                      <div key={i} className="truncate">{inj}</div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Warnings */}
-              {warnings.length > 0 && (
-                <div className="py-2 border-t border-zinc-800/50">
-                  <div className="text-[10px] text-amber-400 uppercase tracking-wide mb-1">Warnings</div>
-                  <div className="text-xs text-amber-300/80 space-y-0.5">
-                    {warnings.map((w, i) => (
-                      <div key={i}>{w}</div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Timestamp */}
-              <div className="pt-2 border-t border-zinc-800/50 text-[10px] text-zinc-600">
-                Updated {format(new Date(edge.as_of), 'MMM d, h:mm a')}
-              </div>
-            </div>
-          )}
-        </>
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
       )}
+
+      {/* Expanded Book Comparison */}
+      {expanded && (
+        <div className="px-5 pb-4 border-t border-zinc-800/50">
+          <div className="grid grid-cols-2 gap-4 pt-4">
+            {/* All Spread Books */}
+            <div className="space-y-2">
+              {group.spreadEdges.map(edge => (
+                <BookRow key={edge.id} edge={edge} />
+              ))}
+            </div>
+
+            {/* All Total Books */}
+            <div className="space-y-2">
+              {group.totalEdges.map(edge => (
+                <BookRow key={edge.id} edge={edge} />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EdgeSummary({
+  label,
+  edge,
+  allEdges,
+  expanded
+}: {
+  label: string;
+  edge: EdgeWithDetails | null;
+  allEdges: EdgeWithDetails[];
+  expanded: boolean;
+}) {
+  if (!edge) {
+    return (
+      <div className="p-3 rounded-lg bg-zinc-800/30">
+        <p className="text-xs text-zinc-600 mb-1">{label}</p>
+        <p className="text-sm text-zinc-500">No data</p>
+      </div>
+    );
+  }
+
+  const explain = edge.explain as {
+    qualifies?: boolean;
+    winProbability?: number;
+    expectedValue?: number;
+    confidenceTier?: string;
+  } | null;
+
+  const qualifies = explain?.qualifies ?? false;
+  const winProb = explain?.winProbability;
+  const ev = explain?.expectedValue;
+  const bookName = edge.sportsbook?.name || 'Unknown';
+  const bookCount = allEdges.length;
+
+  return (
+    <div className={`
+      p-3 rounded-lg transition-colors
+      ${qualifies
+        ? 'bg-emerald-500/10 border border-emerald-500/20'
+        : 'bg-zinc-800/30'
+      }
+    `}>
+      {/* Label + Book */}
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs text-zinc-500">{label}</p>
+        <p className="text-xs text-zinc-500">
+          {bookName}
+          {bookCount > 1 && !expanded && (
+            <span className="text-zinc-600 ml-1">+{bookCount - 1}</span>
+          )}
+        </p>
+      </div>
+
+      {/* Bet + Edge */}
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="text-sm font-medium text-zinc-100 truncate">
+          {edge.recommended_bet_label}
+        </p>
+        <p className={`text-lg font-semibold tabular-nums ${
+          qualifies ? 'text-emerald-400' : 'text-zinc-300'
+        }`}>
+          {edge.edge_points > 0 ? '+' : ''}{edge.edge_points.toFixed(1)}
+        </p>
+      </div>
+
+      {/* Stats */}
+      {qualifies && winProb && (
+        <div className="flex items-center gap-3 mt-2 text-xs">
+          <span className="text-zinc-500">
+            {winProb}% win
+          </span>
+          {ev !== undefined && (
+            <span className={ev > 0 ? 'text-emerald-400' : 'text-zinc-500'}>
+              {ev > 0 ? '+' : ''}${ev.toFixed(0)} EV
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BookRow({ edge }: { edge: EdgeWithDetails }) {
+  const explain = edge.explain as {
+    qualifies?: boolean;
+    lineMovement?: {
+      sharpSignal: string;
+      alignsWithBet: boolean;
+    } | null;
+  } | null;
+
+  const qualifies = explain?.qualifies ?? false;
+  const bookName = edge.sportsbook?.name || 'Unknown';
+  const bookKey = edge.sportsbook?.key || '';
+  const isSharp = ['pinnacle', 'lowvig'].includes(bookKey);
+  const lineMovement = explain?.lineMovement;
+  const hasSharpSignal = lineMovement && lineMovement.sharpSignal !== 'neutral';
+
+  return (
+    <div className={`
+      flex items-center justify-between py-2 px-3 rounded-lg text-sm
+      ${qualifies ? 'bg-emerald-500/5' : 'bg-zinc-800/20'}
+    `}>
+      <div className="flex items-center gap-2">
+        <span className="text-zinc-300">{bookName}</span>
+        {isSharp && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 font-medium">
+            SHARP
+          </span>
+        )}
+        {hasSharpSignal && (
+          <span className={`text-[10px] ${lineMovement.alignsWithBet ? 'text-emerald-400' : 'text-amber-400'}`}>
+            {lineMovement.alignsWithBet ? '✓' : '⚠'}
+          </span>
+        )}
+      </div>
+      <div className="flex items-center gap-3">
+        <span className="text-zinc-400 text-xs">
+          {edge.market_type === 'spread'
+            ? formatSpread(edge.market_spread_home || 0)
+            : edge.market_total_points
+          }
+        </span>
+        <span className={`font-medium tabular-nums ${
+          qualifies ? 'text-emerald-400' : 'text-zinc-300'
+        }`}>
+          {edge.edge_points > 0 ? '+' : ''}{edge.edge_points.toFixed(1)}
+        </span>
+      </div>
     </div>
   );
 }
