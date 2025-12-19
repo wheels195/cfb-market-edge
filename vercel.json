@@ -3,22 +3,6 @@
     {
       "path": "/api/cron/sync-events",
       "schedule": "0 6 * * *"
-    },
-    {
-      "path": "/api/cron/sync-results",
-      "schedule": "0 7 * * *"
-    },
-    {
-      "path": "/api/cron/run-model",
-      "schedule": "0 8 * * *"
-    },
-    {
-      "path": "/api/cron/poll-odds",
-      "schedule": "0 9 * * *"
-    },
-    {
-      "path": "/api/cron/materialize-edges",
-      "schedule": "0 10 * * *"
     }
   ]
 }
