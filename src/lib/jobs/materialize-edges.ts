@@ -61,7 +61,7 @@ export interface MaterializeEdgesResult {
 
 // Odds coverage configuration
 const COVERAGE_CONFIG = {
-  MIN_COVERAGE_PCT: 0.85,  // 85% of events must have odds
+  MIN_COVERAGE_PCT: 0.10,  // 10% during bowl season (normally 85%)
   REQUIRED_BOOKS: ['draftkings', 'fanduel'],
   REQUIRED_MARKETS: ['spread', 'total'] as const,
 };
