@@ -1,40 +1,12 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [
-    {
-      "path": "/api/cron/run-pipeline",
-      "schedule": "0 8 * * 4,5,6",
-      "comment": "08:00 UTC = 02:00 CT (Thu-Sat mornings before games)"
-    },
-    {
-      "path": "/api/cron/poll-odds",
-      "schedule": "*/10 * * * 4,5,6",
-      "comment": "Every 10 min UTC on Thu-Sat (game days)"
-    },
-    {
-      "path": "/api/cron/materialize-edges",
-      "schedule": "*/15 * * * 4,5,6",
-      "comment": "Every 15 min UTC on Thu-Sat (match poll cadence)"
-    },
-    {
-      "path": "/api/cron/set-closing-lines",
-      "schedule": "*/30 * * * 4,5,6,0",
-      "comment": "Every 30 min Thu-Sun, computes per-event closing (last tick before kickoff)"
-    },
-    {
-      "path": "/api/cron/sync-results",
-      "schedule": "0 6 * * 0",
-      "comment": "06:00 UTC = 00:00 CT (Sunday midnight after games)"
-    },
-    {
-      "path": "/api/cron/grade-bets",
-      "schedule": "0 7 * * 0",
-      "comment": "07:00 UTC = 01:00 CT Sun (after results synced)"
-    },
-    {
-      "path": "/api/cron/cleanup",
-      "schedule": "0 3 * * *",
-      "comment": "03:00 UTC = 21:00 CT (nightly cleanup)"
-    }
+    { "path": "/api/cron/run-pipeline", "schedule": "0 8 * * 4,5,6" },
+    { "path": "/api/cron/poll-odds", "schedule": "*/10 * * * 4,5,6" },
+    { "path": "/api/cron/materialize-edges", "schedule": "*/15 * * * 4,5,6" },
+    { "path": "/api/cron/set-closing-lines", "schedule": "*/30 * * * 4,5,6,0" },
+    { "path": "/api/cron/sync-results", "schedule": "0 6 * * 0" },
+    { "path": "/api/cron/grade-bets", "schedule": "0 7 * * 0" },
+    { "path": "/api/cron/cleanup", "schedule": "0 3 * * *" }
   ]
 }
