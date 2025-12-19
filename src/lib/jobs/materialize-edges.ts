@@ -48,8 +48,28 @@ const ENHANCED_WEIGHTS = {
 export interface MaterializeEdgesResult {
   edgesCreated: number;
   edgesUpdated: number;
+  oddsCoverage: {
+    totalEvents: number;
+    dkSpreadCoverage: number;
+    fdSpreadCoverage: number;
+    dkTotalCoverage: number;
+    fdTotalCoverage: number;
+    passed: boolean;
+  } | null;
   errors: string[];
 }
+
+// Odds coverage configuration
+const COVERAGE_CONFIG = {
+  MIN_COVERAGE_PCT: 0.85,  // 85% of events must have odds
+  REQUIRED_BOOKS: ['draftkings', 'fanduel'],
+  REQUIRED_MARKETS: ['spread', 'total'] as const,
+};
+
+// Pipeline window configuration
+const WINDOW_CONFIG = {
+  LOOKAHEAD_DAYS: 10,  // Only process events within 10 days
+};
 
 // Calibration data from 2022-2025 backtest analysis (updated Dec 2025)
 // Win probabilities based on edge size from actual historical results
@@ -155,15 +175,101 @@ function getWeekNumber(gameDate: Date, season: number): number {
 /**
  * Materialize edges for all upcoming events
  */
+/**
+ * Check odds coverage before materializing edges
+ * Returns coverage stats and whether the gate passed
+ */
+async function checkOddsCoverage(eventIds: string[]): Promise<{
+  totalEvents: number;
+  dkSpreadCoverage: number;
+  fdSpreadCoverage: number;
+  dkTotalCoverage: number;
+  fdTotalCoverage: number;
+  passed: boolean;
+}> {
+  const totalEvents = eventIds.length;
+  if (totalEvents === 0) {
+    return { totalEvents: 0, dkSpreadCoverage: 1, fdSpreadCoverage: 1, dkTotalCoverage: 1, fdTotalCoverage: 1, passed: true };
+  }
+
+  // Get sportsbook IDs
+  const { data: sportsbooks } = await supabase
+    .from('sportsbooks')
+    .select('id, key')
+    .in('key', COVERAGE_CONFIG.REQUIRED_BOOKS);
+
+  if (!sportsbooks || sportsbooks.length === 0) {
+    console.warn('[Coverage] No sportsbooks found');
+    return { totalEvents, dkSpreadCoverage: 0, fdSpreadCoverage: 0, dkTotalCoverage: 0, fdTotalCoverage: 0, passed: false };
+  }
+
+  const dkId = sportsbooks.find(s => s.key === 'draftkings')?.id;
+  const fdId = sportsbooks.find(s => s.key === 'fanduel')?.id;
+
+  // Count events with recent odds (within last 2 hours) for each book/market combo
+  const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+
+  async function countCoverage(sportsbookId: string | undefined, marketType: string): Promise<number> {
+    if (!sportsbookId) return 0;
+
+    const { data } = await supabase
+      .from('odds_ticks')
+      .select('event_id')
+      .in('event_id', eventIds)
+      .eq('sportsbook_id', sportsbookId)
+      .eq('market_type', marketType)
+      .gte('captured_at', twoHoursAgo);
+
+    const uniqueEvents = new Set((data || []).map(t => t.event_id));
+    return uniqueEvents.size;
+  }
+
+  const [dkSpread, fdSpread, dkTotal, fdTotal] = await Promise.all([
+    countCoverage(dkId, 'spread'),
+    countCoverage(fdId, 'spread'),
+    countCoverage(dkId, 'total'),
+    countCoverage(fdId, 'total'),
+  ]);
+
+  const dkSpreadCoverage = dkSpread / totalEvents;
+  const fdSpreadCoverage = fdSpread / totalEvents;
+  const dkTotalCoverage = dkTotal / totalEvents;
+  const fdTotalCoverage = fdTotal / totalEvents;
+
+  // Pass if both books have spread coverage >= threshold
+  // (totals are less critical since we use market-calibrated model)
+  const spreadsPassed = dkSpreadCoverage >= COVERAGE_CONFIG.MIN_COVERAGE_PCT &&
+                        fdSpreadCoverage >= COVERAGE_CONFIG.MIN_COVERAGE_PCT;
+
+  console.log(`[Coverage] DK spread: ${(dkSpreadCoverage * 100).toFixed(1)}%, FD spread: ${(fdSpreadCoverage * 100).toFixed(1)}%`);
+  console.log(`[Coverage] DK total: ${(dkTotalCoverage * 100).toFixed(1)}%, FD total: ${(fdTotalCoverage * 100).toFixed(1)}%`);
+  console.log(`[Coverage] Gate ${spreadsPassed ? 'PASSED' : 'FAILED'} (threshold: ${COVERAGE_CONFIG.MIN_COVERAGE_PCT * 100}%)`);
+
+  return {
+    totalEvents,
+    dkSpreadCoverage,
+    fdSpreadCoverage,
+    dkTotalCoverage,
+    fdTotalCoverage,
+    passed: spreadsPassed,
+  };
+}
+
 export async function materializeEdges(): Promise<MaterializeEdgesResult> {
   const result: MaterializeEdgesResult = {
     edgesCreated: 0,
     edgesUpdated: 0,
+    oddsCoverage: null,
     errors: [],
   };
 
   try {
-    // Get upcoming events with projections and team info
+    // Get upcoming events within lookahead window
+    const now = new Date();
+    const lookaheadEnd = new Date(now.getTime() + WINDOW_CONFIG.LOOKAHEAD_DAYS * 24 * 60 * 60 * 1000);
+
+    console.log(`[Materialize] Processing events from ${now.toISOString()} to ${lookaheadEnd.toISOString()}`);
+
     const { data: events } = await supabase
       .from('events')
       .select(`
@@ -173,9 +279,25 @@ export async function materializeEdges(): Promise<MaterializeEdgesResult> {
         away_team:teams!events_away_team_id_fkey(name)
       `)
       .eq('status', 'scheduled')
-      .gt('commence_time', new Date().toISOString());
+      .gt('commence_time', now.toISOString())
+      .lt('commence_time', lookaheadEnd.toISOString());
 
     if (!events || events.length === 0) return result;
+
+    // Check odds coverage before processing
+    const eventIds = events.map(e => e.id);
+    const coverage = await checkOddsCoverage(eventIds);
+    result.oddsCoverage = coverage;
+
+    if (!coverage.passed) {
+      result.errors.push(
+        `Odds coverage gate failed: DK spread ${(coverage.dkSpreadCoverage * 100).toFixed(1)}%, ` +
+        `FD spread ${(coverage.fdSpreadCoverage * 100).toFixed(1)}% ` +
+        `(required: ${COVERAGE_CONFIG.MIN_COVERAGE_PCT * 100}%)`
+      );
+      console.warn('[Materialize] Skipping edge updates due to low odds coverage');
+      return result;
+    }
 
     // Get projections for these events
     const { data: projections } = await supabase
@@ -637,16 +759,31 @@ async function processTotalEdge(
   );
 
   // Model total is our calibrated projection
-  const modelTotalPoints = mcProjection.modelLine;
+  // SEMANTIC SEPARATION:
+  // baseline_total_points = market line (the starting point)
+  // adjustment_points = weather + pace adjustments
+  // model_total_points = baseline + adjustment (what we'd predict)
+  const baselineTotalPoints = marketTotalPoints;  // Market IS the baseline
+  const adjustmentPoints = mcProjection.adjustments.total;
+  const modelTotalPoints = baselineTotalPoints + adjustmentPoints;
 
   // Edge is CAPPED to prevent unrealistic values
   const edgePoints = mcProjection.cappedEdge;
 
+  // SANITY GATE: Exclude nonsense totals from recommendations
+  const MAX_REASONABLE_ADJUSTMENT = 14;  // No adjustment should exceed 14 pts
+  const sanityFailed = Math.abs(adjustmentPoints) > MAX_REASONABLE_ADJUSTMENT;
+
   // Determine recommended side and label
+  // IMPORTANT: Always update the edge even if edgePoints = 0
   let recommendedSide: string;
   let recommendedBetLabel: string;
 
-  if (edgePoints > 0) {
+  if (sanityFailed) {
+    // Sanity gate failed - exclude from recommendations
+    recommendedSide = 'none';
+    recommendedBetLabel = `EXCLUDED: Adjustment ${adjustmentPoints.toFixed(1)} exceeds limit`;
+  } else if (edgePoints > 0) {
     // Market total higher than model → Bet Under
     recommendedSide = 'under';
     recommendedBetLabel = `Under ${marketTotalPoints}`;
@@ -655,8 +792,9 @@ async function processTotalEdge(
     recommendedSide = 'over';
     recommendedBetLabel = `Over ${marketTotalPoints}`;
   } else {
-    // No edge
-    return;
+    // No edge - still update but mark as no recommendation
+    recommendedSide = 'none';
+    recommendedBetLabel = 'No edge (model = market)';
   }
 
   // Get calibration data based on edge size
@@ -725,20 +863,32 @@ async function processTotalEdge(
     edgePoints,
     recommendedSide,
     recommendedBetLabel,
+    // New semantic fields
+    baselineTotalPoints,
+    adjustmentPoints,
     explain: {
       winProbability: calibration.winProbability,
       expectedValue: calibration.expectedValue,
-      confidenceTier: adjustedTier,
-      qualifies: calibration.qualifies && mcProjection.confidence !== 'low',
-      warnings: allWarnings,
-      reason: calibration.qualifies
-        ? `Market-calibrated edge (${mcProjection.adjustments.total.toFixed(1)} pt adjustment)`
+      confidenceTier: sanityFailed ? 'skip' : adjustedTier,
+      qualifies: !sanityFailed && calibration.qualifies && mcProjection.confidence !== 'low',
+      warnings: sanityFailed
+        ? [...allWarnings, `SANITY GATE FAILED: Adjustment ${adjustmentPoints.toFixed(1)} exceeds ${MAX_REASONABLE_ADJUSTMENT} pt limit`]
+        : allWarnings,
+      reason: sanityFailed
+        ? `EXCLUDED: Adjustment too large (${adjustmentPoints.toFixed(1)} pts)`
+        : calibration.qualifies
+        ? `Market-calibrated edge (${adjustmentPoints.toFixed(1)} pt adjustment)`
         : Math.abs(edgePoints) >= DEFAULT_COEFFICIENTS.maxReasonableEdge
         ? 'Edge capped at maximum - uncertainty too high'
         : 'Edge too small for reliable profit',
       modelVersion: 'market-calibrated-v2',
       rawEdge: mcProjection.rawEdge,
       cappedEdge: mcProjection.cappedEdge,
+      sanityGate: {
+        passed: !sanityFailed,
+        adjustmentPoints,
+        maxAllowed: MAX_REASONABLE_ADJUSTMENT,
+      },
       adjustmentBreakdown: mcProjection.adjustments,
       weather: weatherImpact.hasImpact ? {
         severity: weatherImpact.severity,
@@ -783,6 +933,9 @@ async function upsertEdge(
     edgePoints: number;
     recommendedSide: string;
     recommendedBetLabel: string;
+    // New semantic fields for totals
+    baselineTotalPoints?: number | null;
+    adjustmentPoints?: number | null;
     explain: {
       winProbability: number;
       expectedValue: number;
@@ -879,6 +1032,9 @@ async function upsertEdge(
         edge_points: data.edgePoints,
         recommended_side: data.recommendedSide,
         recommended_bet_label: data.recommendedBetLabel,
+        // New semantic fields (only set if provided)
+        ...(data.baselineTotalPoints !== undefined && { baseline_total_points: data.baselineTotalPoints }),
+        ...(data.adjustmentPoints !== undefined && { adjustment_points: data.adjustmentPoints }),
         explain: data.explain,
       })
       .eq('id', existing.id);
@@ -902,6 +1058,9 @@ async function upsertEdge(
         edge_points: data.edgePoints,
         recommended_side: data.recommendedSide,
         recommended_bet_label: data.recommendedBetLabel,
+        // New semantic fields (only set if provided)
+        ...(data.baselineTotalPoints !== undefined && { baseline_total_points: data.baselineTotalPoints }),
+        ...(data.adjustmentPoints !== undefined && { adjustment_points: data.adjustmentPoints }),
         explain: data.explain,
       });
 

@@ -3,43 +3,68 @@ import { supabase } from '@/lib/db/client';
 export interface SetClosingLinesResult {
   eventsProcessed: number;
   linesSet: number;
+  skippedAlreadySet: number;
   errors: string[];
 }
 
+// Only process events from the last 48 hours to avoid reprocessing old games
+const LOOKBACK_HOURS = 48;
+
 /**
  * Materialize closing lines for events that have kicked off
+ *
+ * Runs continuously (every 30 min on game days) to catch games as they start.
+ * Per-event closing = last tick before that event's kickoff time.
  */
 export async function setClosingLines(): Promise<SetClosingLinesResult> {
   const result: SetClosingLinesResult = {
     eventsProcessed: 0,
     linesSet: 0,
+    skippedAlreadySet: 0,
     errors: [],
   };
 
+  const now = new Date();
+  const lookbackTime = new Date(now.getTime() - LOOKBACK_HOURS * 60 * 60 * 1000);
+
+  console.log(`[SetClosing] Finding events kicked off between ${lookbackTime.toISOString()} and ${now.toISOString()}`);
+
   try {
-    // Get events that have started but don't have closing lines yet
-    const now = new Date();
+    // Get events that have kicked off within the lookback window
+    // Include scheduled (missed status update), in_progress, and final
     const { data: events, error: eventsError } = await supabase
       .from('events')
       .select('id, commence_time')
-      .in('status', ['in_progress', 'final'])
-      .lt('commence_time', now.toISOString());
+      .lt('commence_time', now.toISOString())
+      .gt('commence_time', lookbackTime.toISOString())
+      .order('commence_time', { ascending: false });
 
     if (eventsError) throw eventsError;
-    if (!events || events.length === 0) return result;
 
-    // Also check for scheduled events that have passed their kickoff time
-    const { data: pastScheduled, error: pastError } = await supabase
-      .from('events')
-      .select('id, commence_time')
-      .eq('status', 'scheduled')
-      .lt('commence_time', now.toISOString());
+    if (!events || events.length === 0) {
+      console.log('[SetClosing] No recently kicked-off events found');
+      return result;
+    }
 
-    if (pastError) throw pastError;
+    console.log(`[SetClosing] Found ${events.length} events to check`);
 
-    const allEvents = [...(events || []), ...(pastScheduled || [])];
+    // Check which events already have closing lines (optimization)
+    const eventIds = events.map(e => e.id);
+    const { data: existingClosings } = await supabase
+      .from('closing_lines')
+      .select('event_id')
+      .in('event_id', eventIds);
 
-    for (const event of allEvents) {
+    const eventsWithClosings = new Set((existingClosings || []).map(c => c.event_id));
+
+    for (const event of events) {
+      // Skip if we already have at least one closing line for this event
+      // (the per-side check is still done in processEventClosingLines)
+      if (eventsWithClosings.has(event.id)) {
+        result.skippedAlreadySet++;
+        continue;
+      }
+
       try {
         await processEventClosingLines(event.id, new Date(event.commence_time), result);
         result.eventsProcessed++;
@@ -48,9 +73,12 @@ export async function setClosingLines(): Promise<SetClosingLinesResult> {
         result.errors.push(`Event ${event.id}: ${message}`);
       }
     }
+
+    console.log(`[SetClosing] Complete: ${result.eventsProcessed} processed, ${result.linesSet} lines set, ${result.skippedAlreadySet} skipped`);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     result.errors.push(`Fetch failed: ${message}`);
+    console.error(`[SetClosing] Error: ${message}`);
   }
 
   return result;

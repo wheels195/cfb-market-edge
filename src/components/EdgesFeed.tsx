@@ -266,7 +266,21 @@ function EdgeSummary({
     winProbability?: number;
     expectedValue?: number;
     confidenceTier?: string;
+    adjustmentBreakdown?: {
+      weather: number;
+      pace: number;
+      total: number;
+    };
+    sanityGate?: {
+      passed: boolean;
+      adjustmentPoints: number;
+    };
   } | null;
+
+  // Check if totals are baseline-only (no adjustments active)
+  const isTotal = edge.market_type === 'total';
+  const adjustmentTotal = explain?.adjustmentBreakdown?.total ?? 0;
+  const isTotalBaselineOnly = isTotal && Math.abs(adjustmentTotal) < 0.5;
 
   const qualifies = explain?.qualifies ?? false;
   const winProb = explain?.winProbability;
@@ -321,12 +335,28 @@ function EdgeSummary({
     `}>
       {/* Header with label and grade */}
       <div className="flex items-center justify-between mb-3">
-        <p className="text-xs text-zinc-500 uppercase tracking-widest">{label}</p>
+        <div className="flex items-center gap-2">
+          <p className="text-xs text-zinc-500 uppercase tracking-widest">{label}</p>
+          {isTotalBaselineOnly && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-700 text-zinc-400 font-medium">
+              BASELINE
+            </span>
+          )}
+        </div>
         <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm font-bold ${grade.bgClass} ${grade.colorClass}`}>
           <span>{grade.grade}</span>
           <span className="font-medium opacity-80">{grade.label}</span>
         </div>
       </div>
+
+      {/* Baseline-only totals warning */}
+      {isTotalBaselineOnly && (
+        <div className="mb-3 px-3 py-2 rounded bg-zinc-800/50 border border-zinc-700/50">
+          <p className="text-xs text-zinc-500">
+            Totals model uses market as baseline. No weather/pace adjustments active.
+          </p>
+        </div>
+      )}
 
       {/* THE BET - Explicit action with the number */}
       <div className="mb-5">
