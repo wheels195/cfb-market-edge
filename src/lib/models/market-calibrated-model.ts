@@ -232,7 +232,9 @@ export function generateTotalProjection(
     explanation.push(`Pace adjustment: ${adjustments.situational > 0 ? '+' : ''}${adjustments.situational.toFixed(1)} pts`);
   }
 
-  const modelLine = marketTotal - adjustments.total;
+  // Model line = market line + our adjustments
+  // (If we expect more points from pace, we add; if bad weather, we subtract)
+  const modelLine = marketTotal + adjustments.total;
   const rawEdge = marketTotal - modelLine;
   const cappedEdge = Math.sign(rawEdge) * Math.min(Math.abs(rawEdge), coefficients.maxReasonableEdge);
 
