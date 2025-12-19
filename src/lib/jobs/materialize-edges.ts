@@ -39,24 +39,23 @@ export interface MaterializeEdgesResult {
   errors: string[];
 }
 
-// Calibration data from 2022-2024 backtest analysis
-// Win probabilities based on edge size for high-confidence bets (all models agree)
+// Calibration data from 2022-2025 backtest analysis (updated Dec 2025)
+// Win probabilities based on edge size from actual historical results
 const CALIBRATION = {
-  // Edge range -> Win probability
+  // Edge range -> Win probability (from backtest: 2022-2025, 2495 games)
   edgeProbabilities: [
-    { min: 3, max: 4, winProb: 0.615, ev: 19.23, tier: 'medium' as const },
-    { min: 4, max: 5, winProb: 0.643, ev: 25.00, tier: 'high' as const },
-    { min: 5, max: 6, winProb: 0.536, ev: 2.50, tier: 'medium' as const },
-    { min: 6, max: 7, winProb: 0.613, ev: 18.71, tier: 'very-high' as const },
+    { min: 2.5, max: 3, winProb: 0.595, ev: 13.64, tier: 'very-high' as const }, // 59.5% win, +13.6% ROI
+    { min: 3, max: 4, winProb: 0.558, ev: 6.61, tier: 'high' as const },         // 55.8% win, +6.6% ROI
+    { min: 4, max: 5, winProb: 0.548, ev: 4.55, tier: 'medium' as const },       // 54.8% win, +4.5% ROI
   ],
-  // Profitable filter: edge 3-7 with high confidence
+  // Profitable filter: edge 2.5-5 pts (5+ loses money)
   profitableFilter: {
-    minEdge: 3,
-    maxEdge: 7,
+    minEdge: 2.5,
+    maxEdge: 5,
   },
   // Default for edges outside calibrated range
-  defaultLow: { winProb: 0.50, ev: -5.00, tier: 'skip' as const },
-  defaultHigh: { winProb: 0.47, ev: -12.00, tier: 'skip' as const }, // Large edges are model errors
+  defaultLow: { winProb: 0.49, ev: -7.00, tier: 'skip' as const },  // <2.5 pts: unprofitable
+  defaultHigh: { winProb: 0.46, ev: -11.00, tier: 'skip' as const }, // 5+ pts: model errors, unprofitable
 };
 
 function getCalibrationData(absEdge: number): {
@@ -72,13 +71,13 @@ function getCalibrationData(absEdge: number): {
   const qualifies = absEdge >= CALIBRATION.profitableFilter.minEdge &&
                    absEdge < CALIBRATION.profitableFilter.maxEdge;
 
-  // Add warnings for edge size
+  // Add warnings for edge size (updated based on 2022-2025 backtest)
   if (absEdge >= 10) {
     warnings.push('LARGE_EDGE: Model disagrees with market by 10+ pts - likely model error');
-  } else if (absEdge >= 7) {
-    warnings.push('CAUTION: Edge 7-10 pts has lower historical win rate');
-  } else if (absEdge < 2) {
-    warnings.push('SMALL_EDGE: Edge under 2 pts may not overcome the vig');
+  } else if (absEdge >= 5) {
+    warnings.push('CAUTION: Edge 5+ pts historically unprofitable - model may be missing factors');
+  } else if (absEdge < 2.5) {
+    warnings.push('SMALL_EDGE: Edge under 2.5 pts may not overcome the vig');
   }
 
   // Find matching calibration bucket
@@ -94,21 +93,21 @@ function getCalibrationData(absEdge: number): {
     }
   }
 
-  // Edge too small (< 3)
+  // Edge too small (< 2.5)
   if (absEdge < CALIBRATION.profitableFilter.minEdge) {
     return {
-      winProbability: 50,
-      expectedValue: -5.00,
+      winProbability: 49,
+      expectedValue: -7.00,
       confidenceTier: 'low',
       qualifies: false,
       warnings,
     };
   }
 
-  // Edge too large (>= 7) - likely model error
+  // Edge too large (>= 5) - historically unprofitable
   return {
-    winProbability: 47,
-    expectedValue: -12.00,
+    winProbability: 46,
+    expectedValue: -11.00,
     confidenceTier: 'skip',
     qualifies: false,
     warnings,
@@ -215,6 +214,8 @@ export async function materializeEdges(): Promise<MaterializeEdgesResult> {
         commence_time: rawEvent.commence_time,
         home_team: homeTeam || null,
         away_team: awayTeam || null,
+        home_team_id: (rawEvent as { home_team_id?: string }).home_team_id,
+        away_team_id: (rawEvent as { away_team_id?: string }).away_team_id,
       };
 
       // Look up weather for this game
@@ -243,6 +244,37 @@ export async function materializeEdges(): Promise<MaterializeEdgesResult> {
         awayInjuryReport?.injuries || []
       );
 
+      // NEW: Get pace adjustment for totals
+      let paceAdj = { combinedPaceAdjustment: 0, homePaceRank: null as number | null, awayPaceRank: null as number | null };
+      if (event.home_team_id && event.away_team_id) {
+        try {
+          paceAdj = await getPaceAdjustment(event.home_team_id, event.away_team_id, currentSeason);
+        } catch {
+          // Pace data not available
+        }
+      }
+
+      // NEW: Get situational adjustment (travel, rest, rivalry)
+      let situationalAdj = { homeAdjustment: 0, awayAdjustment: 0, factors: null as Record<string, unknown> | null };
+      if (event.home_team_id && event.away_team_id) {
+        try {
+          const sitData = await calculateSituationalAdjustment(
+            event.id,
+            event.home_team_id,
+            event.away_team_id,
+            gameDate,
+            currentSeason
+          );
+          situationalAdj = {
+            homeAdjustment: sitData.homeAdjustment,
+            awayAdjustment: sitData.awayAdjustment,
+            factors: sitData.factors as unknown as Record<string, unknown>,
+          };
+        } catch {
+          // Situational data not available
+        }
+      }
+
       for (const sportsbook of sportsbooks) {
         try {
           // Analyze line movement for this event/sportsbook
@@ -252,11 +284,11 @@ export async function materializeEdges(): Promise<MaterializeEdgesResult> {
             event.commence_time
           );
 
-          // Process spreads
-          await processSpreadEdge(event, projection, sportsbook, result, weatherImpact, playerFactorAdj, injuryImpact, lineMovement);
+          // Process spreads (with situational adjustment)
+          await processSpreadEdge(event, projection, sportsbook, result, weatherImpact, playerFactorAdj, injuryImpact, lineMovement, situationalAdj);
 
-          // Process totals
-          await processTotalEdge(event, projection, sportsbook, result, weatherImpact, playerFactorAdj, injuryImpact, lineMovement);
+          // Process totals (with pace adjustment)
+          await processTotalEdge(event, projection, sportsbook, result, weatherImpact, playerFactorAdj, injuryImpact, lineMovement, paceAdj);
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Unknown error';
           result.errors.push(`Event ${event.id} / ${sportsbook.key}: ${message}`);
@@ -312,7 +344,8 @@ async function processSpreadEdge(
   weatherImpact: WeatherImpact,
   playerFactorAdj: PlayerFactorAdjustment,
   injuryImpact: InjuryImpact,
-  lineMovement: LineMovementImpact
+  lineMovement: LineMovementImpact,
+  situationalAdj: { homeAdjustment: number; awayAdjustment: number; factors: Record<string, unknown> | null }
 ): Promise<void> {
   // Get latest spread tick for home side
   const { data: latestTick } = await supabase
@@ -333,7 +366,9 @@ async function processSpreadEdge(
   // - Player factors: positive = home team better than rated
   // - Injury: positive = home team is hurt more, spread should favor away
   // - Line movement: positive = sharp money on home (follow the sharps)
-  const totalAdjustment = playerFactorAdj.spreadAdjustment - injuryImpact.spreadAdjustment + lineMovement.spreadAdjustment;
+  // - Situational: home/away advantage from travel, rest, rivalry
+  const situationalNet = (situationalAdj.homeAdjustment - situationalAdj.awayAdjustment) * ENHANCED_WEIGHTS.situational;
+  const totalAdjustment = playerFactorAdj.spreadAdjustment - injuryImpact.spreadAdjustment + lineMovement.spreadAdjustment + situationalNet;
   const adjustedModelSpread = projection.model_spread_home - totalAdjustment;
 
   // Calculate edge using adjusted model spread
@@ -434,7 +469,7 @@ async function processSpreadEdge(
       qualifies: calibration.qualifies,
       warnings: allWarnings,
       reason: calibration.qualifies
-        ? 'Meets profitable filter criteria (edge 3-7 pts)'
+        ? 'Meets profitable filter criteria (edge 2.5-5 pts)'
         : calibration.confidenceTier === 'skip'
         ? weatherExplains
           ? 'Edge may be weather-related'
@@ -454,6 +489,12 @@ async function processSpreadEdge(
         adjustment: injuryImpact.spreadAdjustment,
         confidence: injuryImpact.confidence,
         keyInjuries: injuryImpact.keyInjuries,
+      } : null,
+      situational: situationalAdj.factors ? {
+        homeAdjustment: situationalAdj.homeAdjustment,
+        awayAdjustment: situationalAdj.awayAdjustment,
+        netAdjustment: (situationalAdj.homeAdjustment - situationalAdj.awayAdjustment) * ENHANCED_WEIGHTS.situational,
+        factors: situationalAdj.factors,
       } : null,
       lineMovement: {
         opening: lineMovement.lineMovement.spread.opening,
@@ -481,7 +522,8 @@ async function processTotalEdge(
   weatherImpact: WeatherImpact,
   playerFactorAdj: PlayerFactorAdjustment,
   injuryImpact: InjuryImpact,
-  lineMovement: LineMovementImpact
+  lineMovement: LineMovementImpact,
+  paceAdj: { combinedPaceAdjustment: number; homePaceRank: number | null; awayPaceRank: number | null }
 ): Promise<void> {
   // Get latest total tick (over side has the points)
   const { data: latestTick } = await supabase
@@ -498,7 +540,11 @@ async function processTotalEdge(
   if (!latestTick || latestTick.total_points === null) return;
 
   const marketTotalPoints = latestTick.total_points;
-  const modelTotalPoints = projection.model_total_points;
+
+  // Apply pace adjustment to model total
+  // Positive pace adjustment = faster combined tempo = higher expected scoring
+  const paceAdjustedTotal = projection.model_total_points + (paceAdj.combinedPaceAdjustment * ENHANCED_WEIGHTS.pace);
+  const modelTotalPoints = paceAdjustedTotal;
 
   // Calculate edge
   // edge_points = market_total_points - model_total_points
@@ -584,7 +630,7 @@ async function processTotalEdge(
       qualifies: calibration.qualifies && adjustedTier !== 'low',
       warnings: allWarnings,
       reason: calibration.qualifies
-        ? 'Meets profitable filter criteria (edge 3-7 pts)'
+        ? 'Meets profitable filter criteria (edge 2.5-5 pts)'
         : calibration.confidenceTier === 'skip'
         ? weatherExplains
           ? 'Edge may be weather-related - market pricing in conditions'
@@ -594,6 +640,12 @@ async function processTotalEdge(
         severity: weatherImpact.severity,
         factors: weatherImpact.factors,
         totalAdjustment: weatherImpact.totalAdjustment,
+      } : null,
+      pace: paceAdj.combinedPaceAdjustment !== 0 ? {
+        adjustment: paceAdj.combinedPaceAdjustment,
+        homePaceRank: paceAdj.homePaceRank,
+        awayPaceRank: paceAdj.awayPaceRank,
+        effectiveAdjustment: paceAdj.combinedPaceAdjustment * ENHANCED_WEIGHTS.pace,
       } : null,
       lineMovement: {
         opening: lineMovement.lineMovement.total.opening,
@@ -649,6 +701,18 @@ async function upsertEdge(
         adjustment: number;
         confidence: 'high' | 'medium' | 'low';
         keyInjuries: string[];
+      } | null;
+      situational?: {
+        homeAdjustment: number;
+        awayAdjustment: number;
+        netAdjustment: number;
+        factors: Record<string, unknown>;
+      } | null;
+      pace?: {
+        adjustment: number;
+        homePaceRank: number | null;
+        awayPaceRank: number | null;
+        effectiveAdjustment: number;
       } | null;
       lineMovement?: {
         opening: number | null;
