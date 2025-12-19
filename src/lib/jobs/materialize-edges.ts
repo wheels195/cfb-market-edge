@@ -24,6 +24,16 @@ import {
 import { getRecencyWeightedSpread, DEFAULT_ELO_CONFIG } from '@/lib/models/elo';
 import { getPaceAdjustment, getEfficiencyMatchup } from '@/lib/jobs/sync-advanced-stats';
 import { calculateSituationalAdjustment } from '@/lib/models/situational';
+import {
+  calculateConferenceAdjustment,
+  getBowlGameAdjustment,
+} from '@/lib/models/conference-strength';
+import {
+  generateSpreadProjection,
+  generateTotalProjection,
+  DEFAULT_COEFFICIENTS,
+  MarketCalibratedProjection,
+} from '@/lib/models/market-calibrated-model';
 
 // Enhanced model factor weights (tuned from backtesting)
 const ENHANCED_WEIGHTS = {
@@ -31,6 +41,8 @@ const ENHANCED_WEIGHTS = {
   pace: 0.8,            // Pace impact on totals
   efficiency: 0.3,      // PPA matchup on spreads
   situational: 0.6,     // Travel/rest/rivalry
+  conference: 1.0,      // Conference strength (full weight - critical factor)
+  bowlGame: 1.0,        // Bowl game adjustments
 };
 
 export interface MaterializeEdgesResult {
@@ -335,6 +347,7 @@ async function fetchWeatherData(): Promise<Map<string, CFBDWeather>> {
 
 /**
  * Process spread edge for an event/sportsbook
+ * Uses MARKET-CALIBRATED model: market line is baseline, we find edges via adjustments
  */
 async function processSpreadEdge(
   event: { id: string; commence_time?: string; home_team: { name: string } | null; away_team: { name: string } | null },
@@ -362,25 +375,57 @@ async function processSpreadEdge(
   if (!latestTick || latestTick.spread_points_home === null) return;
 
   const marketSpreadHome = latestTick.spread_points_home;
-  // Apply all adjustments to model spread:
-  // - Player factors: positive = home team better than rated
-  // - Injury: positive = home team is hurt more, spread should favor away
-  // - Line movement: positive = sharp money on home (follow the sharps)
-  // - Situational: home/away advantage from travel, rest, rivalry
-  const situationalNet = (situationalAdj.homeAdjustment - situationalAdj.awayAdjustment) * ENHANCED_WEIGHTS.situational;
-  const totalAdjustment = playerFactorAdj.spreadAdjustment - injuryImpact.spreadAdjustment + lineMovement.spreadAdjustment + situationalNet;
-  const adjustedModelSpread = projection.model_spread_home - totalAdjustment;
+  const homeTeamName = event.home_team?.name || 'Home';
+  const awayTeamName = event.away_team?.name || 'Away';
+  const gameDate = event.commence_time ? new Date(event.commence_time) : new Date();
+  const weekNumber = getWeekNumber(gameDate, gameDate.getFullYear());
 
-  // Calculate edge using adjusted model spread
-  // edge_points = market_spread_home - adjusted_model_spread_home
-  const edgePoints = marketSpreadHome - adjustedModelSpread;
+  // Calculate conference strength adjustment
+  const confAdj = calculateConferenceAdjustment(homeTeamName, awayTeamName);
+
+  // Check for bowl game adjustments
+  const bowlAdj = getBowlGameAdjustment(gameDate);
+
+  // Convert line movement signal to numeric (-1 to 1)
+  const sharpSignalValue =
+    lineMovement.spreadSignal.signal === 'sharp_home' ? 1 :
+    lineMovement.spreadSignal.signal === 'sharp_away' ? -1 : 0;
+  const sharpConfidenceMultiplier =
+    lineMovement.spreadSignal.confidence === 'high' ? 1.0 :
+    lineMovement.spreadSignal.confidence === 'medium' ? 0.5 : 0.2;
+  const sharpMovement = sharpSignalValue * sharpConfidenceMultiplier;
+
+  // Calculate situational net
+  const situationalNet = (situationalAdj.homeAdjustment - situationalAdj.awayAdjustment) * ENHANCED_WEIGHTS.situational;
+
+  // USE MARKET-CALIBRATED MODEL
+  // Market line IS the baseline - our edge comes from adjustments
+  const mcProjection = generateSpreadProjection(
+    marketSpreadHome,
+    {
+      conferenceStrengthDiff: confAdj.strengthDiff,
+      homeInjuryPoints: injuryImpact.spreadAdjustment > 0 ? injuryImpact.spreadAdjustment : 0,
+      awayInjuryPoints: injuryImpact.spreadAdjustment < 0 ? Math.abs(injuryImpact.spreadAdjustment) : 0,
+      sharpMovement,
+      weatherImpact: weatherImpact.spreadAdjustment,
+      situationalDiff: situationalNet,
+      isCrossConference: confAdj.isCrossConference,
+      isBowlGame: bowlAdj.isBowl,
+      weekNumber,
+    },
+    DEFAULT_COEFFICIENTS
+  );
+
+  // Model spread is our calibrated projection
+  const adjustedModelSpread = mcProjection.modelLine;
+
+  // Edge is CAPPED to prevent unrealistic values
+  // Use capped edge from market-calibrated model
+  const edgePoints = mcProjection.cappedEdge;
 
   // Determine recommended side and label
   let recommendedSide: string;
   let recommendedBetLabel: string;
-
-  const homeTeamName = event.home_team?.name || 'Home';
-  const awayTeamName = event.away_team?.name || 'Away';
 
   if (edgePoints > 0) {
     // Bet Home at market number
@@ -406,7 +451,21 @@ async function processSpreadEdge(
   const injuryWarnings = injuryImpact.warnings;
   // Add line movement warnings
   const lineMovementWarnings = lineMovement.warnings;
-  const allWarnings = [...calibration.warnings, ...weatherWarnings, ...playerWarnings, ...injuryWarnings, ...lineMovementWarnings];
+  // Add conference warnings
+  const conferenceWarnings: string[] = [];
+  if (confAdj.isCrossConference) {
+    const stronger = confAdj.adjustment > 0 ? 'Home' : 'Away';
+    const diff = Math.abs(confAdj.adjustment);
+    if (diff >= 2) {
+      conferenceWarnings.push(`CONFERENCE: ${stronger} from stronger conference (${confAdj.adjustment > 0 ? confAdj.homeConference : confAdj.awayConference} vs ${confAdj.adjustment > 0 ? confAdj.awayConference : confAdj.homeConference}), ${diff.toFixed(1)} pt adj`);
+    }
+  }
+  // Add bowl game warnings
+  const bowlWarnings: string[] = [];
+  if (bowlAdj.isBowl) {
+    bowlWarnings.push(`BOWL GAME: Neutral site (-${bowlAdj.homeFieldReduction} HFA), watch for opt-outs`);
+  }
+  const allWarnings = [...calibration.warnings, ...weatherWarnings, ...playerWarnings, ...injuryWarnings, ...lineMovementWarnings, ...conferenceWarnings, ...bowlWarnings];
 
   // Check if bet aligns with sharp money
   const sharpAlignment = betAlignsWithSharps(recommendedSide, lineMovement.spreadSignal, lineMovement.totalSignal);
@@ -449,6 +508,16 @@ async function processSpreadEdge(
     if (adjustedTier === 'high') adjustedTier = 'medium';
   }
 
+  // Add model explanation to warnings
+  if (mcProjection.explanation.length > 0) {
+    allWarnings.push(...mcProjection.explanation.map(e => `MODEL: ${e}`));
+  }
+
+  // Use model confidence if it's lower than calibration
+  if (mcProjection.confidence === 'low' && adjustedTier !== 'skip') {
+    adjustedTier = 'low';
+  }
+
   await upsertEdge({
     eventId: event.id,
     sportsbookId: sportsbook.id,
@@ -457,7 +526,7 @@ async function processSpreadEdge(
     marketSpreadHome,
     marketTotalPoints: null,
     marketPriceAmerican: latestTick.price_american,
-    modelSpreadHome: adjustedModelSpread, // Store the adjusted model spread
+    modelSpreadHome: adjustedModelSpread,
     modelTotalPoints: null,
     edgePoints,
     recommendedSide,
@@ -466,15 +535,18 @@ async function processSpreadEdge(
       winProbability: calibration.winProbability,
       expectedValue: calibration.expectedValue,
       confidenceTier: adjustedTier,
-      qualifies: calibration.qualifies,
+      qualifies: calibration.qualifies && mcProjection.confidence !== 'low',
       warnings: allWarnings,
       reason: calibration.qualifies
-        ? 'Meets profitable filter criteria (edge 2.5-5 pts)'
-        : calibration.confidenceTier === 'skip'
-        ? weatherExplains
-          ? 'Edge may be weather-related'
-          : 'Edge too large - likely model error'
+        ? `Market-calibrated edge (${mcProjection.adjustments.total.toFixed(1)} pt adjustment)`
+        : Math.abs(edgePoints) >= DEFAULT_COEFFICIENTS.maxReasonableEdge
+        ? 'Edge capped at maximum - uncertainty too high'
         : 'Edge too small for reliable profit',
+      modelVersion: 'market-calibrated-v2',
+      rawEdge: mcProjection.rawEdge,
+      cappedEdge: mcProjection.cappedEdge,
+      uncertainty: mcProjection.uncertainty,
+      adjustmentBreakdown: mcProjection.adjustments,
       weather: weatherImpact.hasImpact ? {
         severity: weatherImpact.severity,
         factors: weatherImpact.factors,
@@ -496,6 +568,16 @@ async function processSpreadEdge(
         netAdjustment: (situationalAdj.homeAdjustment - situationalAdj.awayAdjustment) * ENHANCED_WEIGHTS.situational,
         factors: situationalAdj.factors,
       } : null,
+      conference: confAdj.isCrossConference ? {
+        homeConference: confAdj.homeConference,
+        awayConference: confAdj.awayConference,
+        strengthDiff: confAdj.strengthDiff,
+        adjustment: confAdj.adjustment,
+      } : null,
+      bowlGame: bowlAdj.isBowl ? {
+        homeFieldReduction: bowlAdj.homeFieldReduction,
+        uncertaintyBoost: bowlAdj.uncertaintyBoost,
+      } : null,
       lineMovement: {
         opening: lineMovement.lineMovement.spread.opening,
         current: lineMovement.lineMovement.spread.current,
@@ -513,6 +595,7 @@ async function processSpreadEdge(
 
 /**
  * Process total edge for an event/sportsbook
+ * Uses MARKET-CALIBRATED model: market line is baseline, we find edges via adjustments
  */
 async function processTotalEdge(
   event: { id: string; commence_time?: string; home_team: { name: string } | null; away_team: { name: string } | null },
@@ -541,14 +624,23 @@ async function processTotalEdge(
 
   const marketTotalPoints = latestTick.total_points;
 
-  // Apply pace adjustment to model total
-  // Positive pace adjustment = faster combined tempo = higher expected scoring
-  const paceAdjustedTotal = projection.model_total_points + (paceAdj.combinedPaceAdjustment * ENHANCED_WEIGHTS.pace);
-  const modelTotalPoints = paceAdjustedTotal;
+  // USE MARKET-CALIBRATED MODEL for totals
+  // Market line IS the baseline - our edge comes from weather and pace adjustments
+  const mcProjection = generateTotalProjection(
+    marketTotalPoints,
+    {
+      combinedPaceAdjustment: paceAdj.combinedPaceAdjustment,
+      weatherTotalImpact: weatherImpact.totalAdjustment,
+      isIndoor: false, // TODO: Could add venue data
+    },
+    DEFAULT_COEFFICIENTS
+  );
 
-  // Calculate edge
-  // edge_points = market_total_points - model_total_points
-  const edgePoints = marketTotalPoints - modelTotalPoints;
+  // Model total is our calibrated projection
+  const modelTotalPoints = mcProjection.modelLine;
+
+  // Edge is CAPPED to prevent unrealistic values
+  const edgePoints = mcProjection.cappedEdge;
 
   // Determine recommended side and label
   let recommendedSide: string;
@@ -610,6 +702,16 @@ async function processTotalEdge(
     if (adjustedTier === 'high') adjustedTier = 'medium';
   }
 
+  // Add model explanation to warnings
+  if (mcProjection.explanation.length > 0) {
+    allWarnings.push(...mcProjection.explanation.map(e => `MODEL: ${e}`));
+  }
+
+  // Use model confidence if it's lower than calibration
+  if (mcProjection.confidence === 'low' && adjustedTier !== 'skip') {
+    adjustedTier = 'low';
+  }
+
   await upsertEdge({
     eventId: event.id,
     sportsbookId: sportsbook.id,
@@ -627,15 +729,17 @@ async function processTotalEdge(
       winProbability: calibration.winProbability,
       expectedValue: calibration.expectedValue,
       confidenceTier: adjustedTier,
-      qualifies: calibration.qualifies && adjustedTier !== 'low',
+      qualifies: calibration.qualifies && mcProjection.confidence !== 'low',
       warnings: allWarnings,
       reason: calibration.qualifies
-        ? 'Meets profitable filter criteria (edge 2.5-5 pts)'
-        : calibration.confidenceTier === 'skip'
-        ? weatherExplains
-          ? 'Edge may be weather-related - market pricing in conditions'
-          : 'Edge too large - likely model error'
+        ? `Market-calibrated edge (${mcProjection.adjustments.total.toFixed(1)} pt adjustment)`
+        : Math.abs(edgePoints) >= DEFAULT_COEFFICIENTS.maxReasonableEdge
+        ? 'Edge capped at maximum - uncertainty too high'
         : 'Edge too small for reliable profit',
+      modelVersion: 'market-calibrated-v2',
+      rawEdge: mcProjection.rawEdge,
+      cappedEdge: mcProjection.cappedEdge,
+      adjustmentBreakdown: mcProjection.adjustments,
       weather: weatherImpact.hasImpact ? {
         severity: weatherImpact.severity,
         factors: weatherImpact.factors,
@@ -686,6 +790,19 @@ async function upsertEdge(
       qualifies: boolean;
       warnings: string[];
       reason: string;
+      // Market-calibrated model fields
+      modelVersion?: string;
+      rawEdge?: number;
+      cappedEdge?: number;
+      uncertainty?: number;
+      adjustmentBreakdown?: {
+        conference: number;
+        injuries: number;
+        lineMovement: number;
+        weather: number;
+        situational: number;
+        total: number;
+      };
       weather?: {
         severity: string;
         factors: string[];
@@ -707,6 +824,16 @@ async function upsertEdge(
         awayAdjustment: number;
         netAdjustment: number;
         factors: Record<string, unknown>;
+      } | null;
+      conference?: {
+        homeConference: string | null;
+        awayConference: string | null;
+        strengthDiff: number;
+        adjustment: number;
+      } | null;
+      bowlGame?: {
+        homeFieldReduction: number;
+        uncertaintyBoost: number;
       } | null;
       pace?: {
         adjustment: number;

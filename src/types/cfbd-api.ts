@@ -175,6 +175,8 @@ export interface CFBDBettingLine {
   overUnderOpen: number | null;
   homeMoneyline: number | null;
   awayMoneyline: number | null;
+  overOdds?: number | null;
+  underOdds?: number | null;
 }
 
 export interface CFBDGameLines {
@@ -204,6 +206,8 @@ export interface CFBDPPAStats {
   firstDown: number;
   secondDown: number;
   thirdDown: number;
+  successRate?: number;
+  explosiveness?: number;
   cumulative?: {
     total: number;
     passing: number;
@@ -258,6 +262,8 @@ export interface CFBDPlayer {
   homeCity: string | null;
   homeState: string | null;
   homeCountry: string | null;
+  recruitStars?: number | null;
+  recruitRating?: number | null;
 }
 
 export interface CFBDPlayerStat {
@@ -270,6 +276,48 @@ export interface CFBDPlayerStat {
   category: 'passing' | 'rushing' | 'receiving' | 'defensive' | 'kicking' | 'punting' | 'kickReturns' | 'puntReturns';
   statType: string;
   stat: string;
+}
+
+// Player game stats - for identifying starters post-game
+export interface CFBDPlayerGameStat {
+  category: string;
+  type: string;
+  value: string | number;
+}
+
+export interface CFBDPlayerGameStatsPlayer {
+  id: string;
+  name: string;
+  categories: Array<{
+    name: string;
+    types: Array<{
+      name: string;
+      stat: string | number;
+    }>;
+  }>;
+}
+
+export interface CFBDPlayerGameStatsTeam {
+  school: string;
+  conference: string;
+  homeAway: 'home' | 'away';
+  points: number;
+  categories: Array<{
+    name: string;
+    types: Array<{
+      name: string;
+      athletes: Array<{
+        id: string;
+        name: string;
+        stat: string | number;
+      }>;
+    }>;
+  }>;
+}
+
+export interface CFBDPlayerGameStats {
+  id: number;
+  teams: CFBDPlayerGameStatsTeam[];
 }
 
 export interface CFBDPlayerUsage {
@@ -302,6 +350,7 @@ export interface CFBDTransferPortalPlayer {
   rating: number | null;
   stars: number;
   eligibility: string;
+  playerId?: string | null;
 }
 
 // Key Player Analysis

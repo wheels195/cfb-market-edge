@@ -11,6 +11,7 @@ import {
   CFBDPlayerStat,
   CFBDPlayerUsage,
   CFBDTransferPortalPlayer,
+  CFBDPlayerGameStats,
 } from '@/types/cfbd-api';
 
 // API call tracking for usage monitoring
@@ -337,6 +338,26 @@ export class CFBDApiClient {
   }
 
   /**
+   * Get player game statistics (for identifying starters post-game)
+   * Returns player stats broken down by game
+   */
+  async getPlayerGameStats(
+    season: number,
+    week?: number,
+    seasonType?: 'regular' | 'postseason',
+    team?: string,
+    category?: 'passing' | 'rushing' | 'receiving' | 'defensive'
+  ): Promise<CFBDPlayerGameStats[]> {
+    const params: Record<string, string> = { year: season.toString() };
+    if (week !== undefined) params.week = week.toString();
+    if (seasonType) params.seasonType = seasonType;
+    if (team) params.team = team;
+    if (category) params.category = category;
+
+    return this.fetch<CFBDPlayerGameStats[]>('/games/players', params);
+  }
+
+  /**
    * Get player usage metrics
    */
   async getPlayerUsage(
@@ -557,6 +578,40 @@ export class CFBDApiClient {
 
     return this.fetch('/ppa/predicted', params);
   }
+
+  /**
+   * Get team recruiting rankings
+   */
+  async getRecruitingTeams(
+    season: number,
+    team?: string
+  ): Promise<Array<{
+    year: number;
+    rank: number;
+    team: string;
+    points: number;
+  }>> {
+    const params: Record<string, string> = { year: season.toString() };
+    if (team) params.team = team;
+
+    return this.fetch('/recruiting/teams', params);
+  }
+
+  /**
+   * Get talent composite rankings
+   */
+  async getTalentRankings(
+    season: number
+  ): Promise<Array<{
+    year: number;
+    school: string;
+    talent: number;
+  }>> {
+    const params: Record<string, string> = { year: season.toString() };
+
+    return this.fetch('/talent', params);
+  }
+
 }
 
 // Singleton instance

@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { EdgeWithDetails } from '@/types/database';
 import { format, formatDistanceToNow } from 'date-fns';
 
@@ -113,10 +112,10 @@ export function EdgesFeed({ edges }: EdgesFeedProps) {
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
               </span>
               <h2 className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
-                Action ({qualifyingGames.length})
+                Top Rated ({qualifyingGames.length})
               </h2>
             </div>
-            <p className="text-xs text-zinc-500">Edges in profitable range (2.5-5 pts)</p>
+            <p className="text-xs text-zinc-500">Grade A/B bets with edges in profitable range</p>
           </div>
           <div className="space-y-3">
             {qualifyingGames.map(group => (
@@ -153,9 +152,9 @@ function GameCard({ group }: { group: GameGroup }) {
   const [expanded, setExpanded] = useState(false);
   const timeUntil = formatDistanceToNow(group.commenceTime, { addSuffix: false });
 
-  // Get team display names (prefer abbreviations)
-  const away = group.awayAbbrev || group.awayTeam.split(' ').pop() || group.awayTeam;
-  const home = group.homeAbbrev || group.homeTeam.split(' ').pop() || group.homeTeam;
+  // Use full team names
+  const away = group.awayTeam;
+  const home = group.homeTeam;
 
   return (
     <div className={`
@@ -166,22 +165,16 @@ function GameCard({ group }: { group: GameGroup }) {
       }
     `}>
       {/* Game Header */}
-      <div className="px-5 py-4">
-        <div className="flex items-center justify-between mb-4">
-          <Link href={`/events/${group.eventId}`} className="group">
-            <h3 className="text-lg font-semibold text-zinc-100 group-hover:text-white transition-colors">
+      <div className="px-5 py-5">
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h3 className="text-xl font-semibold text-zinc-100">
               {away} <span className="text-zinc-500 font-normal">@</span> {home}
             </h3>
-            <p className="text-sm text-zinc-500">
+            <p className="text-base text-zinc-500 mt-1">
               {format(group.commenceTime, 'EEE, MMM d · h:mm a')} <span className="text-zinc-600">·</span> {timeUntil}
             </p>
-          </Link>
-
-          {group.hasQualifying && (
-            <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              Qualifying
-            </span>
-          )}
+          </div>
         </div>
 
         {/* Best Edges Row */}
@@ -261,9 +254,9 @@ function EdgeSummary({
 }) {
   if (!edge) {
     return (
-      <div className="p-3 rounded-lg bg-zinc-800/30">
-        <p className="text-xs text-zinc-600 mb-1">{label}</p>
-        <p className="text-sm text-zinc-500">No data</p>
+      <div className="p-4 rounded-lg bg-zinc-800/30 border border-zinc-800">
+        <p className="text-xs text-zinc-600 uppercase tracking-wide">{label}</p>
+        <p className="text-sm text-zinc-600 mt-2">No data</p>
       </div>
     );
   }
@@ -281,50 +274,112 @@ function EdgeSummary({
   const bookName = edge.sportsbook?.name || 'Unknown';
   const bookCount = allEdges.length;
 
+  // Get bet grade
+  const grade = getBetGrade(edge.edge_points, winProb, qualifies);
+
+  // Determine the action and numbers
+  const isSpread = edge.market_type === 'spread';
+  const marketLineDisplay = isSpread
+    ? formatSpreadLine(edge.market_spread_home)
+    : edge.market_total_points?.toString() ?? 'N/A';
+  const modelLineDisplay = isSpread
+    ? formatSpreadLine(edge.model_spread_home)
+    : edge.model_total_points?.toString() ?? 'N/A';
+
+  // Clear action text with the actual line
+  let actionText = '';
+  let actionDetail = '';
+
+  if (isSpread) {
+    const homeSpread = edge.market_spread_home || 0;
+    const awaySpread = -homeSpread;
+
+    if (edge.edge_points > 0) {
+      // Bet home team
+      const spreadStr = homeSpread > 0 ? `+${homeSpread}` : homeSpread === 0 ? 'PK' : `${homeSpread}`;
+      actionText = `Take ${edge.event?.home_team_name || 'Home'} ${spreadStr}`;
+    } else {
+      // Bet away team
+      const spreadStr = awaySpread > 0 ? `+${awaySpread}` : awaySpread === 0 ? 'PK' : `${awaySpread}`;
+      actionText = `Take ${edge.event?.away_team_name || 'Away'} ${spreadStr}`;
+    }
+    actionDetail = `on ${bookName}`;
+  } else {
+    const total = edge.market_total_points || 0;
+    if (edge.edge_points > 0) {
+      actionText = `Take UNDER ${total}`;
+    } else {
+      actionText = `Take OVER ${total}`;
+    }
+    actionDetail = `on ${bookName}`;
+  }
+
   return (
     <div className={`
-      p-3 rounded-lg transition-colors
-      ${qualifies
-        ? 'bg-emerald-500/10 border border-emerald-500/20'
-        : 'bg-zinc-800/30'
-      }
+      p-4 rounded-lg border transition-colors
+      ${grade.bgClass}
     `}>
-      {/* Label + Book */}
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-xs text-zinc-500">{label}</p>
-        <p className="text-xs text-zinc-500">
-          {bookName}
-          {bookCount > 1 && !expanded && (
-            <span className="text-zinc-600 ml-1">+{bookCount - 1}</span>
-          )}
-        </p>
+      {/* Header with label and grade */}
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-xs text-zinc-500 uppercase tracking-widest">{label}</p>
+        <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm font-bold ${grade.bgClass} ${grade.colorClass}`}>
+          <span>{grade.grade}</span>
+          <span className="font-medium opacity-80">{grade.label}</span>
+        </div>
       </div>
 
-      {/* Bet + Edge */}
-      <div className="flex items-baseline justify-between gap-2">
-        <p className="text-sm font-medium text-zinc-100 truncate">
-          {edge.recommended_bet_label}
+      {/* THE BET - Explicit action with the number */}
+      <div className="mb-5">
+        <p className={`text-xl font-bold ${grade.colorClass}`}>
+          {actionText}
         </p>
-        <p className={`text-lg font-semibold tabular-nums ${
-          qualifies ? 'text-emerald-400' : 'text-zinc-300'
-        }`}>
-          {edge.edge_points > 0 ? '+' : ''}{edge.edge_points.toFixed(1)}
-        </p>
-      </div>
-
-      {/* Stats */}
-      {qualifies && winProb && (
-        <div className="flex items-center gap-3 mt-2 text-xs">
-          <span className="text-zinc-500">
-            {winProb}% win
-          </span>
-          {ev !== undefined && (
-            <span className={ev > 0 ? 'text-emerald-400' : 'text-zinc-500'}>
-              {ev > 0 ? '+' : ''}${ev.toFixed(0)} EV
+        <div className="flex items-center gap-2 mt-2">
+          <span className="text-base text-zinc-400">{bookName}</span>
+          {edge.market_price_american && (
+            <span className={`text-base font-semibold px-2.5 py-1 rounded ${
+              edge.market_price_american > 0
+                ? 'bg-emerald-500/20 text-emerald-400'
+                : 'bg-zinc-700 text-zinc-300'
+            }`}>
+              {edge.market_price_american > 0 ? '+' : ''}{edge.market_price_american}
             </span>
           )}
         </div>
-      )}
+      </div>
+
+      {/* Why - Model comparison */}
+      <div className="bg-zinc-800/50 rounded-lg p-4 mb-4">
+        <div className="flex justify-between items-center mb-2">
+          <span className="text-sm text-zinc-500">Market line</span>
+          <span className="text-base font-medium text-zinc-300">{marketLineDisplay}</span>
+        </div>
+        <div className="flex justify-between items-center mb-2">
+          <span className="text-sm text-zinc-500">Our model</span>
+          <span className="text-base font-bold text-white">{modelLineDisplay}</span>
+        </div>
+        <div className="flex justify-between items-center mb-2">
+          <span className="text-sm text-zinc-500">Edge</span>
+          <span className={`text-base font-bold ${grade.colorClass}`}>
+            {Math.abs(edge.edge_points).toFixed(1)} pts
+          </span>
+        </div>
+        {edge.market_price_american && (
+          <div className="flex justify-between items-center pt-2 border-t border-zinc-700/50">
+            <span className="text-sm text-zinc-500">$100 bet wins</span>
+            <span className="text-base font-medium text-amber-400">
+              ${calculatePayout(edge.market_price_american)}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Footer - Grade explanation */}
+      <div className="flex items-start justify-between gap-2 text-sm">
+        <span className="text-zinc-500">{grade.reason}</span>
+        {bookCount > 1 && !expanded && (
+          <span className="text-zinc-600 whitespace-nowrap">+{bookCount - 1} books</span>
+        )}
+      </div>
     </div>
   );
 }
@@ -381,6 +436,86 @@ function BookRow({ edge }: { edge: EdgeWithDetails }) {
 }
 
 function formatSpread(points: number): string {
+  if (points === 0) return 'PK';
   if (points > 0) return `+${points}`;
   return points.toString();
+}
+
+function formatSpreadLine(points: number | null | undefined): string {
+  if (points === null || points === undefined) return 'N/A';
+  if (points === 0) return 'PK';
+  if (points > 0) return `+${points}`;
+  return points.toString();
+}
+
+function calculatePayout(americanOdds: number): string {
+  // Calculate profit on a $100 bet
+  if (americanOdds > 0) {
+    // Positive odds: +150 means win $150 on $100 bet
+    return americanOdds.toFixed(0);
+  } else {
+    // Negative odds: -110 means bet $110 to win $100, so $100 bet wins $90.91
+    const payout = (100 / Math.abs(americanOdds)) * 100;
+    return payout.toFixed(0);
+  }
+}
+
+interface BetGrade {
+  grade: 'A' | 'B' | 'C' | 'D';
+  label: string;
+  reason: string;
+  colorClass: string;
+  bgClass: string;
+}
+
+function getBetGrade(edgePoints: number, winProb?: number, qualifies?: boolean): BetGrade {
+  const absEdge = Math.abs(edgePoints);
+
+  // Grade A: Sweet spot - historically profitable range with good win probability
+  if (qualifies && absEdge >= 2.5 && absEdge <= 5 && (winProb ?? 0) >= 54) {
+    return {
+      grade: 'A',
+      label: 'Strong',
+      reason: `${absEdge.toFixed(1)} pt edge in optimal range, ${winProb}% win rate`,
+      colorClass: 'text-emerald-400',
+      bgClass: 'bg-emerald-500/20 border-emerald-500/30',
+    };
+  }
+
+  // Grade B: Good edge, slightly outside optimal or lower win prob
+  if (absEdge >= 2 && absEdge <= 6 && (winProb ?? 0) >= 52) {
+    return {
+      grade: 'B',
+      label: 'Good',
+      reason: absEdge > 5
+        ? `Large ${absEdge.toFixed(1)} pt edge, verify line accuracy`
+        : `${absEdge.toFixed(1)} pt edge, ${winProb ?? 'N/A'}% win rate`,
+      colorClass: 'text-blue-400',
+      bgClass: 'bg-blue-500/20 border-blue-500/30',
+    };
+  }
+
+  // Grade C: Marginal - small edge or very large edge (model uncertainty)
+  if (absEdge >= 1.5 && absEdge <= 8) {
+    return {
+      grade: 'C',
+      label: 'Marginal',
+      reason: absEdge < 2.5
+        ? `Small ${absEdge.toFixed(1)} pt edge, thin margin`
+        : `${absEdge.toFixed(1)} pt edge, high variance`,
+      colorClass: 'text-amber-400',
+      bgClass: 'bg-amber-500/20 border-amber-500/30',
+    };
+  }
+
+  // Grade D: Monitor - edge too small or suspiciously large
+  return {
+    grade: 'D',
+    label: 'Monitor',
+    reason: absEdge < 1.5
+      ? `${absEdge.toFixed(1)} pt edge too small for value`
+      : `${absEdge.toFixed(1)} pt edge suspiciously large`,
+    colorClass: 'text-zinc-400',
+    bgClass: 'bg-zinc-700/50 border-zinc-600/30',
+  };
 }

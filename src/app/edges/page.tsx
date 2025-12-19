@@ -37,17 +37,11 @@ export default async function EdgesPage({ searchParams }: PageProps) {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
-          Edges Feed
+          Games
         </h1>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-          Top edges for upcoming games based on model projections vs market lines
+        <p className="text-base text-zinc-500 dark:text-zinc-400 mt-1">
+          Betting edges for upcoming games
         </p>
-        <div className="mt-2 text-xs text-zinc-400 dark:text-zinc-500">
-          Data sources: Elo ratings, SP+, PPA metrics, weather, returning production, injuries, and line movement.
-          <span className="text-green-500 dark:text-green-400 ml-1">
-            Sharp money detection active.
-          </span>
-        </div>
       </div>
 
       <EdgesFilters currentFilter={filter} />
