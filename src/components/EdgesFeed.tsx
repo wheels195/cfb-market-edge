@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { EdgeWithDetails } from '@/types/database';
 import { format, formatDistanceToNow } from 'date-fns';
@@ -9,59 +10,74 @@ interface EdgesFeedProps {
 }
 
 export function EdgesFeed({ edges }: EdgesFeedProps) {
+  // Separate qualifying and non-qualifying edges
+  const qualifying = edges.filter(e => (e.explain as { qualifies?: boolean })?.qualifies);
+  const other = edges.filter(e => !(e.explain as { qualifies?: boolean })?.qualifies);
+
   return (
-    <div className="space-y-4">
-      {edges.map((edge) => (
-        <EdgeCard key={edge.id} edge={edge} />
-      ))}
+    <div className="space-y-6">
+      {/* Qualifying Bets Section */}
+      {qualifying.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+            <h2 className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wide">
+              Qualifying Bets ({qualifying.length})
+            </h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {qualifying.map((edge) => (
+              <EdgeCard key={edge.id} edge={edge} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Other Edges */}
+      {other.length > 0 && (
+        <div>
+          <h2 className="text-sm font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-3">
+            Other Edges ({other.length})
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {other.map((edge) => (
+              <EdgeCard key={edge.id} edge={edge} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {edges.length === 0 && (
+        <div className="text-center py-12 text-zinc-500">
+          No edges found
+        </div>
+      )}
     </div>
   );
 }
 
 function EdgeCard({ edge }: { edge: EdgeWithDetails }) {
+  const [expanded, setExpanded] = useState(false);
   const event = edge.event;
   const commenceTime = new Date(event.commence_time);
-  const timeStr = format(commenceTime, 'EEE, MMM d h:mm a');
-  const timeUntil = formatDistanceToNow(commenceTime, { addSuffix: true });
+  const timeUntil = formatDistanceToNow(commenceTime, { addSuffix: false });
 
   const bookName = edge.sportsbook?.name || 'Unknown';
-  const absEdge = Math.abs(edge.edge_points);
+  const bookKey = edge.sportsbook?.key || '';
 
-  // Extract calibration data from explain field
+  // Extract explain data
   const explain = edge.explain as {
     winProbability?: number;
     expectedValue?: number;
     confidenceTier?: string;
     qualifies?: boolean;
     warnings?: string[];
-    reason?: string;
-    weather?: {
-      severity: string;
-      factors: string[];
-      totalAdjustment?: number;
-      spreadAdjustment?: number;
-    } | null;
-    lineMovement?: {
-      opening: number | null;
-      current: number | null;
-      movement: number;
-      tickCount: number;
-      sharpSignal: string;
-      sharpConfidence: string;
-      sharpDescription: string;
-      adjustment: number;
-      alignsWithBet: boolean;
-    } | null;
-    injuries?: {
-      adjustment: number;
-      confidence: string;
-      keyInjuries: string[];
-    } | null;
-    playerFactors?: {
-      adjustment: number;
-      confidence: string;
-      factors: string[];
-    } | null;
+    weather?: { severity: string; factors: string[]; totalAdjustment?: number; spreadAdjustment?: number } | null;
+    lineMovement?: { opening: number | null; current: number | null; movement: number; tickCount: number; sharpSignal: string; sharpDescription: string; alignsWithBet: boolean } | null;
+    injuries?: { adjustment: number; keyInjuries: string[] } | null;
+    playerFactors?: { adjustment: number; factors: string[] } | null;
+    situational?: { netAdjustment: number; factors: Record<string, unknown> } | null;
+    pace?: { adjustment: number; effectiveAdjustment: number } | null;
   } | null;
 
   const winProb = explain?.winProbability ?? null;
@@ -69,302 +85,267 @@ function EdgeCard({ edge }: { edge: EdgeWithDetails }) {
   const tier = explain?.confidenceTier ?? 'unknown';
   const qualifies = explain?.qualifies ?? false;
   const warnings = explain?.warnings ?? [];
-  const weather = explain?.weather ?? null;
   const lineMovement = explain?.lineMovement ?? null;
   const injuries = explain?.injuries ?? null;
-  const playerFactors = explain?.playerFactors ?? null;
+  const weather = explain?.weather ?? null;
+  const situational = explain?.situational ?? null;
+  const pace = explain?.pace ?? null;
 
-  // Determine styling based on confidence tier
-  let edgeColor = 'text-zinc-600 dark:text-zinc-400';
-  let edgeBg = 'bg-zinc-100 dark:bg-zinc-800';
-  let tierBadgeColor = 'bg-zinc-200 text-zinc-700';
+  // Has extra details to show?
+  const hasDetails = (lineMovement && lineMovement.tickCount > 0) ||
+                     (injuries && injuries.keyInjuries.length > 0) ||
+                     (weather && weather.severity !== 'none') ||
+                     situational || pace ||
+                     warnings.length > 0;
 
-  if (tier === 'very-high') {
-    edgeColor = 'text-emerald-700 dark:text-emerald-400';
-    edgeBg = 'bg-emerald-100 dark:bg-emerald-900/30';
-    tierBadgeColor = 'bg-emerald-500 text-white';
-  } else if (tier === 'high') {
-    edgeColor = 'text-green-700 dark:text-green-400';
-    edgeBg = 'bg-green-100 dark:bg-green-900/30';
-    tierBadgeColor = 'bg-green-500 text-white';
-  } else if (tier === 'medium') {
-    edgeColor = 'text-blue-700 dark:text-blue-400';
-    edgeBg = 'bg-blue-100 dark:bg-blue-900/30';
-    tierBadgeColor = 'bg-blue-500 text-white';
-  } else if (tier === 'low') {
-    edgeColor = 'text-yellow-700 dark:text-yellow-400';
-    edgeBg = 'bg-yellow-100 dark:bg-yellow-900/30';
-    tierBadgeColor = 'bg-yellow-500 text-white';
-  } else if (tier === 'skip') {
-    edgeColor = 'text-red-700 dark:text-red-400';
-    edgeBg = 'bg-red-100 dark:bg-red-900/30';
-    tierBadgeColor = 'bg-red-500 text-white';
-  }
+  // Tier colors
+  const tierConfig: Record<string, { bg: string; text: string; border: string }> = {
+    'very-high': { bg: 'bg-emerald-500', text: 'text-emerald-400', border: 'border-emerald-500/30' },
+    'high': { bg: 'bg-green-500', text: 'text-green-400', border: 'border-green-500/30' },
+    'medium': { bg: 'bg-blue-500', text: 'text-blue-400', border: 'border-blue-500/30' },
+    'low': { bg: 'bg-yellow-500', text: 'text-yellow-400', border: 'border-yellow-500/30' },
+    'skip': { bg: 'bg-zinc-500', text: 'text-zinc-400', border: 'border-zinc-500/30' },
+  };
+  const tierStyle = tierConfig[tier] || tierConfig.skip;
 
-  // Format market and model numbers
-  const isSpread = edge.market_type === 'spread';
-  const marketNumber = isSpread
-    ? `${event.home_team_name} ${formatSpread(edge.market_spread_home || 0)}`
-    : `O/U ${edge.market_total_points}`;
-  const modelNumber = isSpread
-    ? `${event.home_team_name} ${formatSpread(edge.model_spread_home || 0)}`
-    : `${edge.model_total_points}`;
+  // Sharp book indicator
+  const isSharpBook = ['pinnacle', 'lowvig'].includes(bookKey);
 
   return (
-    <div className={`bg-white dark:bg-zinc-900 rounded-lg border overflow-hidden ${
-      qualifies
-        ? 'border-green-300 dark:border-green-700 ring-2 ring-green-100 dark:ring-green-900/50'
-        : 'border-zinc-200 dark:border-zinc-800'
-    }`}>
-      {/* Qualifying Badge */}
-      {qualifies && (
-        <div className="bg-gradient-to-r from-green-500 to-emerald-500 text-white text-xs font-bold px-4 py-1.5 flex items-center gap-2">
-          <span>BET SIGNAL</span>
-          <span className="opacity-75">|</span>
-          <span className="font-normal">Meets profitable criteria (60.2% historical win rate)</span>
-        </div>
-      )}
+    <div className={`
+      relative rounded-lg overflow-hidden transition-all duration-200
+      ${qualifies
+        ? 'bg-gradient-to-br from-emerald-950/50 to-zinc-900 border border-emerald-500/40 shadow-lg shadow-emerald-500/10'
+        : 'bg-zinc-900/80 border border-zinc-800 hover:border-zinc-700'
+      }
+    `}>
+      {/* Compact Header */}
+      <div className="p-3 pb-2">
+        {/* Top row: Teams + Time */}
+        <div className="flex items-start justify-between gap-2 mb-2">
+          <Link
+            href={`/events/${event.id}`}
+            className="flex-1 min-w-0 group"
+          >
+            <div className="font-semibold text-zinc-100 text-sm truncate group-hover:text-blue-400 transition-colors">
+              {event.away_team_abbrev || event.away_team_name?.split(' ').pop()} @ {event.home_team_abbrev || event.home_team_name?.split(' ').pop()}
+            </div>
+            <div className="text-[11px] text-zinc-500">
+              {format(commenceTime, 'EEE h:mma')} · {timeUntil}
+            </div>
+          </Link>
 
-      {/* Header */}
-      <div className="px-4 py-3 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
-        <Link
-          href={`/events/${event.id}`}
-          className="hover:text-blue-600 dark:hover:text-blue-400"
-        >
-          <div className="font-medium text-zinc-900 dark:text-zinc-100">
-            {event.away_team_name} @ {event.home_team_name}
+          {/* Badges */}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${tierStyle.bg} text-white`}>
+              {tier === 'very-high' ? 'A+' : tier === 'high' ? 'A' : tier === 'medium' ? 'B' : tier === 'low' ? 'C' : 'D'}
+            </span>
+            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+              edge.market_type === 'spread'
+                ? 'bg-violet-500/20 text-violet-300'
+                : 'bg-amber-500/20 text-amber-300'
+            }`}>
+              {edge.market_type === 'spread' ? 'SPR' : 'TOT'}
+            </span>
           </div>
-          <div className="text-xs text-zinc-500 dark:text-zinc-500">
-            {timeStr} ({timeUntil})
-          </div>
-        </Link>
-        <div className="flex items-center gap-2">
-          <span className={`px-2 py-0.5 rounded text-xs font-medium ${tierBadgeColor}`}>
-            {tier === 'very-high' ? 'VERY HIGH' : tier.toUpperCase()}
-          </span>
-          <span className={`px-2 py-0.5 rounded text-xs font-medium ${edgeBg} ${edgeColor}`}>
-            {edge.market_type === 'spread' ? 'Spread' : 'Total'}
-          </span>
-          <span className="px-2 py-0.5 rounded text-xs font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400">
-            {bookName}
-          </span>
         </div>
+
+        {/* Main Content: Edge + Bet */}
+        <div className="flex items-center gap-3 mb-2">
+          {/* Edge Value */}
+          <div className={`text-2xl font-black tracking-tight ${
+            qualifies ? 'text-emerald-400' : tierStyle.text
+          }`}>
+            {edge.edge_points > 0 ? '+' : ''}{edge.edge_points.toFixed(1)}
+          </div>
+
+          {/* Recommended Bet */}
+          <div className="flex-1 min-w-0">
+            <div className="text-xs text-zinc-500 mb-0.5">Bet</div>
+            <div className="font-semibold text-zinc-100 text-sm truncate">
+              {edge.recommended_bet_label}
+            </div>
+          </div>
+        </div>
+
+        {/* Stats Row */}
+        <div className="flex items-center gap-4 text-xs">
+          {/* Win Prob */}
+          <div>
+            <span className="text-zinc-500">Win </span>
+            <span className={winProb && winProb >= 55 ? 'text-green-400 font-semibold' : 'text-zinc-300'}>
+              {winProb !== null ? `${winProb}%` : '—'}
+            </span>
+          </div>
+
+          {/* EV */}
+          <div>
+            <span className="text-zinc-500">EV </span>
+            <span className={ev && ev > 0 ? 'text-green-400 font-semibold' : ev && ev < 0 ? 'text-red-400' : 'text-zinc-300'}>
+              {ev !== null ? `${ev > 0 ? '+' : ''}$${ev.toFixed(0)}` : '—'}
+            </span>
+          </div>
+
+          {/* Book */}
+          <div className="ml-auto flex items-center gap-1">
+            {isSharpBook && (
+              <span className="text-[9px] px-1 py-0.5 rounded bg-orange-500/20 text-orange-400 font-medium">
+                SHARP
+              </span>
+            )}
+            <span className="text-zinc-400">{bookName}</span>
+          </div>
+        </div>
+
+        {/* Line Movement Indicator (compact) */}
+        {lineMovement && lineMovement.sharpSignal !== 'neutral' && (
+          <div className={`mt-2 flex items-center gap-1.5 text-[11px] ${
+            lineMovement.alignsWithBet ? 'text-green-400' : 'text-amber-400'
+          }`}>
+            <span className="font-medium">
+              {lineMovement.alignsWithBet ? '✓' : '⚠'} Sharp money {lineMovement.sharpSignal}
+            </span>
+            <span className="text-zinc-500">
+              {lineMovement.opening} → {lineMovement.current}
+            </span>
+          </div>
+        )}
       </div>
 
-      {/* Body - All Required Fields */}
-      <div className="p-4 space-y-4">
-        {/* Market vs Model Numbers */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
-              Market Number ({bookName})
-            </div>
-            <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-              {marketNumber}
-            </div>
-          </div>
-          <div>
-            <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
-              Model Number
-            </div>
-            <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-              {modelNumber}
-            </div>
-          </div>
-        </div>
-
-        {/* Edge + Win Probability + EV */}
-        <div className="grid grid-cols-3 gap-4">
-          <div>
-            <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
-              Edge
-            </div>
-            <div className={`text-xl font-bold ${edgeColor}`}>
-              {edge.edge_points > 0 ? '+' : ''}{edge.edge_points.toFixed(1)} pts
-            </div>
-          </div>
-          <div>
-            <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
-              Win Probability
-            </div>
-            <div className={`text-xl font-bold ${winProb && winProb >= 55 ? 'text-green-600 dark:text-green-400' : 'text-zinc-700 dark:text-zinc-300'}`}>
-              {winProb !== null ? `${winProb}%` : 'N/A'}
-            </div>
-          </div>
-          <div>
-            <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
-              Expected Value
-            </div>
-            <div className={`text-xl font-bold ${ev && ev > 0 ? 'text-green-600 dark:text-green-400' : ev && ev < 0 ? 'text-red-600 dark:text-red-400' : 'text-zinc-700 dark:text-zinc-300'}`}>
-              {ev !== null ? `$${ev.toFixed(2)}` : 'N/A'}
-            </div>
-          </div>
-        </div>
-
-        {/* Favorable Bet - MUST BE EXPLICIT */}
-        <div className={`${edgeBg} rounded-lg p-3`}>
-          <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
-            Favorable Bet
-          </div>
-          <div className={`text-xl font-bold ${edgeColor}`}>
-            {edge.recommended_bet_label} ({bookName})
-          </div>
-        </div>
-
-        {/* Price */}
-        {edge.market_price_american && (
-          <div className="text-sm text-zinc-500 dark:text-zinc-400">
-            Price: {formatOdds(edge.market_price_american)}
-          </div>
-        )}
-
-        {/* Line Movement - Sharp Money Indicator */}
-        {lineMovement && lineMovement.opening !== null && (
-          <div className={`rounded-lg p-3 ${
-            lineMovement.alignsWithBet
-              ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
-              : lineMovement.sharpSignal !== 'neutral'
-                ? 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800'
-                : 'bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700'
-          }`}>
-            <div className="flex items-center justify-between mb-2">
-              <div className={`text-xs font-medium ${
-                lineMovement.alignsWithBet
-                  ? 'text-green-800 dark:text-green-200'
-                  : lineMovement.sharpSignal !== 'neutral'
-                    ? 'text-amber-800 dark:text-amber-200'
-                    : 'text-zinc-600 dark:text-zinc-400'
-              }`}>
-                Line Movement
-                {lineMovement.sharpSignal !== 'neutral' && (
-                  <span className={`ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                    lineMovement.alignsWithBet
-                      ? 'bg-green-500 text-white'
-                      : 'bg-amber-500 text-white'
-                  }`}>
-                    SHARP MONEY
-                  </span>
-                )}
-              </div>
-              <div className="text-xs text-zinc-500">
-                {lineMovement.tickCount} tick{lineMovement.tickCount !== 1 ? 's' : ''} tracked
-              </div>
-            </div>
-            <div className="flex items-center gap-2 text-sm">
-              <span className="font-medium text-zinc-700 dark:text-zinc-300">
-                {lineMovement.opening}
+      {/* Expandable Details */}
+      {hasDetails && (
+        <>
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="w-full px-3 py-1.5 flex items-center justify-center gap-1 text-[11px] text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50 transition-colors border-t border-zinc-800"
+          >
+            <span>{expanded ? 'Hide' : 'Show'} details</span>
+            <svg
+              className={`w-3 h-3 transition-transform ${expanded ? 'rotate-180' : ''}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+            {warnings.length > 0 && !expanded && (
+              <span className="ml-1 px-1 py-0.5 rounded bg-amber-500/20 text-amber-400 text-[9px] font-medium">
+                {warnings.length}
               </span>
-              <span className="text-zinc-400">→</span>
-              <span className="font-medium text-zinc-700 dark:text-zinc-300">
-                {lineMovement.current}
-              </span>
-              <span className={`font-semibold ${
-                lineMovement.movement > 0 ? 'text-green-600' : lineMovement.movement < 0 ? 'text-red-600' : 'text-zinc-500'
-              }`}>
-                ({lineMovement.movement > 0 ? '+' : ''}{lineMovement.movement})
-              </span>
-            </div>
-            {lineMovement.sharpSignal !== 'neutral' && (
-              <div className={`mt-2 text-xs ${
-                lineMovement.alignsWithBet ? 'text-green-700 dark:text-green-300' : 'text-amber-700 dark:text-amber-300'
-              }`}>
-                {lineMovement.sharpDescription}
-              </div>
             )}
-          </div>
-        )}
+          </button>
 
-        {/* Weather Alert */}
-        {weather && weather.severity !== 'none' && (
-          <div className={`rounded-lg p-3 ${
-            weather.severity === 'severe'
-              ? 'bg-blue-100 dark:bg-blue-900/30 border border-blue-300 dark:border-blue-700'
-              : 'bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800'
-          }`}>
-            <div className={`text-xs font-medium mb-1 ${
-              weather.severity === 'severe'
-                ? 'text-blue-800 dark:text-blue-200'
-                : 'text-sky-800 dark:text-sky-200'
-            }`}>
-              Weather Impact ({weather.severity.toUpperCase()})
-            </div>
-            <ul className={`text-sm space-y-1 ${
-              weather.severity === 'severe'
-                ? 'text-blue-700 dark:text-blue-300'
-                : 'text-sky-700 dark:text-sky-300'
-            }`}>
-              {weather.factors.map((factor, i) => (
-                <li key={i}>{factor}</li>
-              ))}
-            </ul>
-            {(weather.totalAdjustment || weather.spreadAdjustment) && (
-              <div className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
-                {weather.totalAdjustment && `Total adj: ${weather.totalAdjustment > 0 ? '+' : ''}${weather.totalAdjustment} pts`}
-                {weather.totalAdjustment && weather.spreadAdjustment && ' | '}
-                {weather.spreadAdjustment && `Spread adj: ${weather.spreadAdjustment > 0 ? '+' : ''}${weather.spreadAdjustment} pts`}
+          {expanded && (
+            <div className="px-3 pb-3 space-y-2 border-t border-zinc-800 bg-zinc-950/50">
+              {/* Market vs Model */}
+              <div className="grid grid-cols-2 gap-2 pt-2">
+                <div>
+                  <div className="text-[10px] text-zinc-500 uppercase tracking-wide">Market</div>
+                  <div className="text-sm font-medium text-zinc-200">
+                    {edge.market_type === 'spread'
+                      ? formatSpread(edge.market_spread_home || 0)
+                      : edge.market_total_points
+                    }
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-zinc-500 uppercase tracking-wide">Model</div>
+                  <div className="text-sm font-medium text-zinc-200">
+                    {edge.market_type === 'spread'
+                      ? formatSpread(edge.model_spread_home || 0)
+                      : edge.model_total_points
+                    }
+                  </div>
+                </div>
               </div>
-            )}
-          </div>
-        )}
 
-        {/* Key Injuries */}
-        {injuries && injuries.keyInjuries.length > 0 && (
-          <div className="rounded-lg p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-            <div className="text-xs font-medium text-red-800 dark:text-red-200 mb-1">
-              Key Injuries (adj: {injuries.adjustment > 0 ? '+' : ''}{injuries.adjustment} pts)
+              {/* Line Movement Details */}
+              {lineMovement && lineMovement.tickCount > 0 && (
+                <div className="py-2 border-t border-zinc-800/50">
+                  <div className="text-[10px] text-zinc-500 uppercase tracking-wide mb-1">Line Movement</div>
+                  <div className="text-xs text-zinc-300">
+                    <span className="font-mono">{lineMovement.opening} → {lineMovement.current}</span>
+                    <span className="text-zinc-500 ml-2">({lineMovement.tickCount} updates)</span>
+                  </div>
+                  {lineMovement.sharpSignal !== 'neutral' && (
+                    <div className={`text-xs mt-1 ${lineMovement.alignsWithBet ? 'text-green-400' : 'text-amber-400'}`}>
+                      {lineMovement.sharpDescription}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Situational Factors */}
+              {situational && situational.netAdjustment !== 0 && (
+                <div className="py-2 border-t border-zinc-800/50">
+                  <div className="text-[10px] text-zinc-500 uppercase tracking-wide mb-1">Situational</div>
+                  <div className="text-xs text-zinc-300">
+                    Adjustment: <span className={situational.netAdjustment > 0 ? 'text-green-400' : 'text-red-400'}>
+                      {situational.netAdjustment > 0 ? '+' : ''}{situational.netAdjustment.toFixed(1)} pts
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Pace */}
+              {pace && pace.effectiveAdjustment !== 0 && (
+                <div className="py-2 border-t border-zinc-800/50">
+                  <div className="text-[10px] text-zinc-500 uppercase tracking-wide mb-1">Pace</div>
+                  <div className="text-xs text-zinc-300">
+                    Total adjustment: <span className={pace.effectiveAdjustment > 0 ? 'text-green-400' : 'text-red-400'}>
+                      {pace.effectiveAdjustment > 0 ? '+' : ''}{pace.effectiveAdjustment.toFixed(1)} pts
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Weather */}
+              {weather && weather.severity !== 'none' && (
+                <div className="py-2 border-t border-zinc-800/50">
+                  <div className="text-[10px] text-zinc-500 uppercase tracking-wide mb-1">
+                    Weather <span className="text-blue-400">({weather.severity})</span>
+                  </div>
+                  <div className="text-xs text-zinc-300 space-y-0.5">
+                    {weather.factors.slice(0, 2).map((f, i) => (
+                      <div key={i}>{f}</div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Injuries */}
+              {injuries && injuries.keyInjuries.length > 0 && (
+                <div className="py-2 border-t border-zinc-800/50">
+                  <div className="text-[10px] text-zinc-500 uppercase tracking-wide mb-1">
+                    Injuries <span className="text-red-400">({injuries.adjustment > 0 ? '+' : ''}{injuries.adjustment})</span>
+                  </div>
+                  <div className="text-xs text-zinc-300 space-y-0.5">
+                    {injuries.keyInjuries.slice(0, 3).map((inj, i) => (
+                      <div key={i} className="truncate">{inj}</div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Warnings */}
+              {warnings.length > 0 && (
+                <div className="py-2 border-t border-zinc-800/50">
+                  <div className="text-[10px] text-amber-400 uppercase tracking-wide mb-1">Warnings</div>
+                  <div className="text-xs text-amber-300/80 space-y-0.5">
+                    {warnings.map((w, i) => (
+                      <div key={i}>{w}</div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Timestamp */}
+              <div className="pt-2 border-t border-zinc-800/50 text-[10px] text-zinc-600">
+                Updated {format(new Date(edge.as_of), 'MMM d, h:mm a')}
+              </div>
             </div>
-            <ul className="text-sm text-red-700 dark:text-red-300 space-y-1">
-              {injuries.keyInjuries.map((injury, i) => (
-                <li key={i}>{injury}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/* Player Factors */}
-        {playerFactors && playerFactors.factors.length > 0 && (
-          <div className="rounded-lg p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800">
-            <div className="text-xs font-medium text-purple-800 dark:text-purple-200 mb-1">
-              Player Factors (adj: {playerFactors.adjustment > 0 ? '+' : ''}{playerFactors.adjustment} pts)
-            </div>
-            <ul className="text-sm text-purple-700 dark:text-purple-300 space-y-1">
-              {playerFactors.factors.map((factor, i) => (
-                <li key={i}>{factor}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/* Warnings */}
-        {warnings.length > 0 && (
-          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
-            <div className="text-xs font-medium text-amber-800 dark:text-amber-200 mb-1">
-              Warnings
-            </div>
-            <ul className="text-sm text-amber-700 dark:text-amber-300 space-y-1">
-              {warnings.map((warning, i) => (
-                <li key={i} className="flex items-start gap-2">
-                  <span className="text-amber-500">!</span>
-                  {warning}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/* Timestamp */}
-        <div className="text-xs text-zinc-400 dark:text-zinc-500">
-          As of {format(new Date(edge.as_of), 'MMM d, h:mm a')}
-        </div>
-      </div>
-
-      {/* Rank Badge */}
-      {edge.rank_abs_edge && (
-        <div className="px-4 py-2 bg-zinc-50 dark:bg-zinc-800/50 border-t border-zinc-100 dark:border-zinc-800">
-          <span className="text-xs text-zinc-500 dark:text-zinc-400">
-            Rank #{edge.rank_abs_edge} for {bookName} {edge.market_type}s
-          </span>
-        </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -373,9 +354,4 @@ function EdgeCard({ edge }: { edge: EdgeWithDetails }) {
 function formatSpread(points: number): string {
   if (points > 0) return `+${points}`;
   return points.toString();
-}
-
-function formatOdds(price: number): string {
-  if (price > 0) return `+${price}`;
-  return price.toString();
 }
