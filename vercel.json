@@ -1,0 +1,28 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/sync-events",
+      "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/cron/poll-odds",
+      "schedule": "*/2 * * * *"
+    },
+    {
+      "path": "/api/cron/set-closing-lines",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/sync-results",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/run-model",
+      "schedule": "0 */4 * * *"
+    },
+    {
+      "path": "/api/cron/materialize-edges",
+      "schedule": "*/5 * * * *"
+    }
+  ]
+}
