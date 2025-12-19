@@ -21,6 +21,17 @@ import {
   betAlignsWithSharps,
   LineMovementImpact,
 } from '@/lib/models/line-movement';
+import { getRecencyWeightedSpread, DEFAULT_ELO_CONFIG } from '@/lib/models/elo';
+import { getPaceAdjustment, getEfficiencyMatchup } from '@/lib/jobs/sync-advanced-stats';
+import { calculateSituationalAdjustment } from '@/lib/models/situational';
+
+// Enhanced model factor weights (tuned from backtesting)
+const ENHANCED_WEIGHTS = {
+  recencyElo: 0.2,      // Recency adjustment amplification
+  pace: 0.8,            // Pace impact on totals
+  efficiency: 0.3,      // PPA matchup on spreads
+  situational: 0.6,     // Travel/rest/rivalry
+};
 
 export interface MaterializeEdgesResult {
   edgesCreated: number;

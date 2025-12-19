@@ -9,11 +9,32 @@ import {
 const BASE_URL = process.env.ODDS_API_BASE_URL || 'https://api.the-odds-api.com/v4';
 const API_KEY = process.env.ODDS_API_KEY;
 const SPORT_KEY = 'americanfootball_ncaaf';
-const REGIONS = 'us';
+const REGIONS = 'us,us2';  // Include us2 for more books
 const ODDS_FORMAT = 'american';
 
-// Bookmakers we care about
-const TARGET_BOOKMAKERS = ['draftkings', 'fanduel'];
+// All available US sportsbooks - ordered by sharpness/importance
+// Pinnacle and LowVig are sharp books used as market benchmarks
+const TARGET_BOOKMAKERS = [
+  'pinnacle',      // Sharp benchmark - the gold standard
+  'lowvig',        // Another sharp book
+  'draftkings',    // Major retail
+  'fanduel',       // Major retail
+  'betmgm',        // Major retail
+  'espnbet',       // ESPN Bet
+  'betrivers',     // BetRivers
+  'bovada',        // Bovada
+  'betonlineag',   // BetOnline
+  'hardrockbet',   // Hard Rock
+  'ballybet',      // Bally
+  'betparx',       // BetParx
+  'fliff',         // Fliff
+];
+
+// Sharp books used for CLV benchmark
+export const SHARP_BOOKMAKERS = ['pinnacle', 'lowvig'];
+
+// Primary retail books for betting recommendations
+export const PRIMARY_BOOKMAKERS = ['draftkings', 'fanduel', 'betmgm', 'espnbet'];
 
 export class OddsApiClient {
   private apiKey: string;
@@ -102,12 +123,15 @@ export class OddsApiClient {
 
   /**
    * Parse raw Odds API response into canonical format
+   * Now includes all available bookmakers for comprehensive market view
    */
-  parseOdds(event: OddsApiEvent): ParsedOdds[] {
+  parseOdds(event: OddsApiEvent, bookmakerFilter?: string[]): ParsedOdds[] {
     const results: ParsedOdds[] = [];
+    const filter = bookmakerFilter || TARGET_BOOKMAKERS;
 
     for (const bookmaker of event.bookmakers) {
-      if (!TARGET_BOOKMAKERS.includes(bookmaker.key)) continue;
+      // Only filter if we have a filter list
+      if (filter.length > 0 && !filter.includes(bookmaker.key)) continue;
 
       const parsed: ParsedOdds = {
         eventId: event.id,
@@ -127,6 +151,60 @@ export class OddsApiClient {
     }
 
     return results;
+  }
+
+  /**
+   * Get Pinnacle lines specifically (sharp benchmark)
+   */
+  async getPinnacleOdds(): Promise<OddsApiEvent[]> {
+    const url = new URL(`${this.baseUrl}/sports/${SPORT_KEY}/odds`);
+    url.searchParams.set('apiKey', this.apiKey);
+    url.searchParams.set('regions', 'us,us2');
+    url.searchParams.set('markets', 'spreads,totals');
+    url.searchParams.set('oddsFormat', ODDS_FORMAT);
+    url.searchParams.set('bookmakers', 'pinnacle');
+
+    const response = await fetch(url.toString());
+    this.updateQuota(response);
+
+    if (!response.ok) {
+      throw new Error(`Odds API error: ${response.status} ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Get consensus line (average across sharp books)
+   */
+  getConsensusLine(event: OddsApiEvent): { spread: number | null; total: number | null } {
+    const sharpOdds = event.bookmakers.filter(b => SHARP_BOOKMAKERS.includes(b.key));
+
+    let spreadSum = 0, spreadCount = 0;
+    let totalSum = 0, totalCount = 0;
+
+    for (const book of sharpOdds) {
+      for (const market of book.markets) {
+        if (market.key === 'spreads') {
+          const homeOutcome = market.outcomes.find(o => o.name === event.home_team);
+          if (homeOutcome?.point !== undefined) {
+            spreadSum += homeOutcome.point;
+            spreadCount++;
+          }
+        } else if (market.key === 'totals') {
+          const overOutcome = market.outcomes.find(o => o.name === 'Over');
+          if (overOutcome?.point !== undefined) {
+            totalSum += overOutcome.point;
+            totalCount++;
+          }
+        }
+      }
+    }
+
+    return {
+      spread: spreadCount > 0 ? spreadSum / spreadCount : null,
+      total: totalCount > 0 ? totalSum / totalCount : null,
+    };
   }
 
   /**
