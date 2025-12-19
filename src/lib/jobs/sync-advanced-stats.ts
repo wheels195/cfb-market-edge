@@ -50,45 +50,67 @@ export async function syncAdvancedStats(season?: number): Promise<{
       return { success: true, teamsUpdated: 0, errors: ['No advanced stats available'] };
     }
 
-    // Get team ID mapping
+    // Get team ID mapping - prefer teams with odds_api_name (used in events)
     const { data: teams } = await supabase
       .from('teams')
-      .select('id, name');
+      .select('id, name, cfbd_team_id, odds_api_name');
 
     if (!teams) {
       return { success: false, teamsUpdated: 0, errors: ['Failed to fetch teams'] };
     }
 
-    const teamMap = new Map(teams.map(t => [t.name.toLowerCase(), t.id]));
+    // Build lookup by CFBD name, preferring teams with odds_api_name
+    const teamMap = new Map<string, string>();
+    const cfbdTeamIdMap = new Map<string, string>(); // cfbd_team_id -> our team id
+
+    // First pass: add all teams
+    for (const t of teams) {
+      teamMap.set(t.name.toLowerCase(), t.id);
+      if (t.cfbd_team_id) {
+        // If there's already an entry, prefer the one with odds_api_name
+        const existing = cfbdTeamIdMap.get(t.cfbd_team_id);
+        if (!existing || t.odds_api_name) {
+          cfbdTeamIdMap.set(t.cfbd_team_id, t.id);
+        }
+      }
+    }
 
     // Calculate pace rankings
+    // CFBD gives total plays and drives for season
+    // Assume ~12.5 games per season for FBS, ~13 drives per game
+    // plays_per_game = total_plays / 12.5
+    const ESTIMATED_GAMES = 12.5;
     const paceData = advancedStats
       .map(s => ({
         team: s.team,
-        playsPerGame: s.offense.plays / Math.max(1, s.offense.drives),
+        playsPerGame: s.offense.plays / ESTIMATED_GAMES,
       }))
       .sort((a, b) => b.playsPerGame - a.playsPerGame);
 
     const paceRanks = new Map(paceData.map((p, i) => [p.team.toLowerCase(), i + 1]));
 
     for (const stat of advancedStats) {
-      const teamId = teamMap.get(stat.team.toLowerCase());
-      if (!teamId) {
-        // Try alternate matching
-        const altTeamId = findTeamId(stat.team, teamMap);
-        if (!altTeamId) {
-          continue;
-        }
+      // First, try to find the CFBD team to get its cfbd_team_id
+      const cfbdTeam = teams.find(t => t.name.toLowerCase() === stat.team.toLowerCase() && t.cfbd_team_id);
+      let finalTeamId: string | undefined;
+
+      if (cfbdTeam && cfbdTeam.cfbd_team_id) {
+        // Use the preferred team for this cfbd_team_id (one with odds_api_name)
+        finalTeamId = cfbdTeamIdMap.get(cfbdTeam.cfbd_team_id);
       }
 
-      const finalTeamId = teamId || findTeamId(stat.team, teamMap);
+      if (!finalTeamId) {
+        // Fallback to name matching
+        finalTeamId = teamMap.get(stat.team.toLowerCase()) || findTeamId(stat.team, teamMap);
+      }
+
       if (!finalTeamId) continue;
 
       const row: AdvancedStatRow = {
         team_id: finalTeamId,
         season: currentSeason,
         week: null, // Season aggregate
-        plays_per_game: stat.offense.plays / Math.max(1, stat.offense.drives),
+        plays_per_game: stat.offense.plays / ESTIMATED_GAMES,
         seconds_per_play: null, // Not directly available
         pace_rank: paceRanks.get(stat.team.toLowerCase()) || null,
         off_success_rate: stat.offense.successRate,
@@ -192,7 +214,8 @@ export async function getPaceAdjustment(
   awayPaceRank: number | null;
   confidence: 'high' | 'medium' | 'low';
 }> {
-  const { data: homeStats } = await supabase
+  // Try current season first, fall back to previous season
+  let { data: homeStats } = await supabase
     .from('team_advanced_stats')
     .select('*')
     .eq('team_id', homeTeamId)
@@ -200,13 +223,35 @@ export async function getPaceAdjustment(
     .is('week', null)
     .single();
 
-  const { data: awayStats } = await supabase
+  if (!homeStats) {
+    const { data: fallback } = await supabase
+      .from('team_advanced_stats')
+      .select('*')
+      .eq('team_id', homeTeamId)
+      .eq('season', season - 1)
+      .is('week', null)
+      .single();
+    homeStats = fallback;
+  }
+
+  let { data: awayStats } = await supabase
     .from('team_advanced_stats')
     .select('*')
     .eq('team_id', awayTeamId)
     .eq('season', season)
     .is('week', null)
     .single();
+
+  if (!awayStats) {
+    const { data: fallback } = await supabase
+      .from('team_advanced_stats')
+      .select('*')
+      .eq('team_id', awayTeamId)
+      .eq('season', season - 1)
+      .is('week', null)
+      .single();
+    awayStats = fallback;
+  }
 
   // Default: no adjustment
   if (!homeStats && !awayStats) {
