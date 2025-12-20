@@ -4,8 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const navItems = [
-  { href: '/edges', label: 'Games' },
-  { href: '/odds', label: 'Odds Board' },
+  { href: '/edges', label: 'Edges' },
   { href: '/paper-trading', label: 'Paper Trading' },
   { href: '/backtest', label: 'Backtest' },
 ];
