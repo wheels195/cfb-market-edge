@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { gradeBets } from '@/lib/jobs/grade-bets';
+import { gradePaperBets } from '@/lib/jobs/grade-paper-bets';
 import { startJobRun, completeJobRun } from '@/lib/jobs/sync-events';
 
 export const dynamic = 'force-dynamic';
@@ -15,25 +16,33 @@ export async function GET(request: Request) {
   const jobId = await startJobRun('grade_bets');
 
   try {
+    // Grade regular bet_records
     const result = await gradeBets();
+
+    // Also grade paper_bets
+    const paperResult = await gradePaperBets();
+
+    const totalGraded = result.betsGraded + paperResult.betsGraded;
+    const allErrors = [...result.errors, ...paperResult.errors];
 
     if (jobId) {
       await completeJobRun(
         jobId,
-        result.errors.length > 0 ? 'failed' : 'success',
-        result.betsGraded,
-        result.errors.length > 0 ? result.errors.join('; ') : undefined,
-        { result }
+        allErrors.length > 0 ? 'failed' : 'success',
+        totalGraded,
+        allErrors.length > 0 ? allErrors.join('; ') : undefined,
+        { result, paperResult }
       );
     }
 
     return NextResponse.json({
-      success: result.errors.length === 0,
+      success: allErrors.length === 0,
       betsGraded: result.betsGraded,
-      wins: result.wins,
-      losses: result.losses,
-      pushes: result.pushes,
-      errors: result.errors,
+      paperBetsGraded: paperResult.betsGraded,
+      wins: result.wins + paperResult.wins,
+      losses: result.losses + paperResult.losses,
+      pushes: result.pushes + paperResult.pushes,
+      errors: allErrors,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
