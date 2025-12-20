@@ -114,3 +114,40 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+// DELETE - Clear all paper bets (for resetting after data corrections)
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const confirmClear = searchParams.get('confirm');
+
+    // Require confirmation parameter to prevent accidental deletion
+    if (confirmClear !== 'true') {
+      return NextResponse.json(
+        { error: 'Must confirm deletion with ?confirm=true' },
+        { status: 400 }
+      );
+    }
+
+    // Delete all paper bets
+    const { error, count } = await supabase
+      .from('paper_bets')
+      .delete()
+      .neq('id', '00000000-0000-0000-0000-000000000000') // Delete all rows
+      .select('id', { count: 'exact', head: true });
+
+    if (error) throw error;
+
+    return NextResponse.json({
+      success: true,
+      message: 'All paper bets cleared',
+      deletedCount: count
+    });
+  } catch (error) {
+    console.error('Error clearing paper bets:', error);
+    return NextResponse.json(
+      { error: 'Failed to clear paper bets' },
+      { status: 500 }
+    );
+  }
+}

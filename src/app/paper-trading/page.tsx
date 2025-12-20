@@ -69,6 +69,7 @@ export default function PaperTradingPage() {
   const [season, setSeason] = useState<number>(2025);
   const [week, setWeek] = useState<number>(1);
   const [stakeAmounts, setStakeAmounts] = useState<Record<string, number>>({});
+  const [clearing, setClearing] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -157,6 +158,22 @@ export default function PaperTradingPage() {
       console.error('Error placing bet:', error);
     }
     setPlacingBet(null);
+  }
+
+  async function clearAllBets() {
+    if (!confirm('Are you sure you want to clear ALL paper bets? This cannot be undone.')) {
+      return;
+    }
+    setClearing(true);
+    try {
+      const res = await fetch('/api/paper-bets?confirm=true', { method: 'DELETE' });
+      if (res.ok) {
+        await loadData();
+      }
+    } catch (error) {
+      console.error('Error clearing bets:', error);
+    }
+    setClearing(false);
   }
 
   if (loading) {
@@ -491,7 +508,26 @@ export default function PaperTradingPage() {
 
         {/* Stats Tab */}
         {activeTab === 'stats' && summary && (
-          <div className="grid md:grid-cols-2 gap-6">
+          <div className="space-y-6">
+            {/* Admin Actions */}
+            <div className="bg-[#111] rounded-lg border border-zinc-800 p-5">
+              <h3 className="font-semibold text-white mb-4">Admin Actions</h3>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-zinc-400">Clear all paper bets to start fresh</p>
+                  <p className="text-xs text-zinc-600 mt-1">Use after data corrections or model updates</p>
+                </div>
+                <button
+                  onClick={clearAllBets}
+                  disabled={clearing || bets.length === 0}
+                  className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {clearing ? 'Clearing...' : `Clear All (${bets.length})`}
+                </button>
+              </div>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-6">
             {/* Forward Test Checklist */}
             <div className="bg-[#111] rounded-lg border border-zinc-800 p-5">
               <h3 className="font-semibold text-white mb-4">Forward Test Checklist</h3>
@@ -553,6 +589,7 @@ export default function PaperTradingPage() {
                   <dd className="text-white">~9%</dd>
                 </div>
               </dl>
+            </div>
             </div>
           </div>
         )}
