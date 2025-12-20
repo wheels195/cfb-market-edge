@@ -66,6 +66,7 @@ export default function PaperTradingPage() {
   const [activeTab, setActiveTab] = useState<'recommendations' | 'bets' | 'dashboard'>('recommendations');
   const [season, setSeason] = useState<number>(2025);
   const [week, setWeek] = useState<number>(1);
+  const [stakeAmounts, setStakeAmounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     loadData();
@@ -85,6 +86,12 @@ export default function PaperTradingPage() {
         setRecommendations(data.recommendations || []);
         setSeason(data.season);
         setWeek(data.week);
+        // Initialize stake amounts to $100
+        const initialStakes: Record<string, number> = {};
+        (data.recommendations || []).forEach((rec: RecommendedBet) => {
+          initialStakes[rec.event_id] = 100;
+        });
+        setStakeAmounts(initialStakes);
       }
 
       if (betsRes.ok) {
@@ -104,6 +111,7 @@ export default function PaperTradingPage() {
 
   async function placeBet(rec: RecommendedBet) {
     setPlacingBet(rec.event_id);
+    const stake = stakeAmounts[rec.event_id] || 100;
     try {
       const res = await fetch('/api/paper-bets', {
         method: 'POST',
@@ -116,6 +124,7 @@ export default function PaperTradingPage() {
           model_spread_home: rec.model_spread_home,
           edge_points: rec.edge_points,
           week_rank: rec.rank,
+          stake_amount: stake,
           season,
           week,
         }),
@@ -143,6 +152,19 @@ export default function PaperTradingPage() {
     return price > 0 ? `+${price}` : `${price}`;
   }
 
+  function calculatePayout(stake: number, americanOdds: number): number {
+    if (americanOdds > 0) {
+      return stake * (americanOdds / 100);
+    } else {
+      return stake * (100 / Math.abs(americanOdds));
+    }
+  }
+
+  function updateStake(eventId: string, value: string) {
+    const numValue = parseInt(value) || 0;
+    setStakeAmounts(prev => ({ ...prev, [eventId]: numValue }));
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
@@ -160,7 +182,6 @@ export default function PaperTradingPage() {
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-96 h-96 bg-emerald-500/10 rounded-full blur-[100px]" />
         <div className="absolute top-1/2 -left-40 w-80 h-80 bg-blue-500/8 rounded-full blur-[80px]" />
-        <div className="absolute -bottom-20 right-1/4 w-64 h-64 bg-purple-500/6 rounded-full blur-[60px]" />
       </div>
 
       <div className="relative z-10 max-w-7xl mx-auto px-6 py-8">
@@ -193,39 +214,11 @@ export default function PaperTradingPage() {
         {/* Stats Grid */}
         {summary && (
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-10">
-            <StatCard
-              label="Total Bets"
-              value={summary.totalBets.toString()}
-              subtext={`${summary.pending} pending`}
-              icon="📊"
-            />
-            <StatCard
-              label="Record"
-              value={`${summary.wins}-${summary.losses}`}
-              subtext={`${summary.winRate.toFixed(1)}% win rate`}
-              icon="🎯"
-            />
-            <StatCard
-              label="P&L"
-              value={`${summary.totalProfit >= 0 ? '+' : ''}$${summary.totalProfit.toFixed(0)}`}
-              subtext={`${summary.roi.toFixed(1)}% ROI`}
-              positive={summary.totalProfit >= 0}
-              icon="💰"
-              highlight
-            />
-            <StatCard
-              label="Max Drawdown"
-              value={`$${summary.maxDrawdown.toFixed(0)}`}
-              subtext="Peak to trough"
-              icon="📉"
-            />
-            <StatCard
-              label="Avg CLV"
-              value={summary.avgCLV !== null ? `${summary.avgCLV >= 0 ? '+' : ''}${summary.avgCLV.toFixed(2)}` : '—'}
-              subtext="vs closing line"
-              positive={summary.avgCLV !== null && summary.avgCLV >= 0}
-              icon="⚡"
-            />
+            <StatCard label="Total Bets" value={summary.totalBets.toString()} subtext={`${summary.pending} pending`} icon="📊" />
+            <StatCard label="Record" value={`${summary.wins}-${summary.losses}`} subtext={`${summary.winRate.toFixed(1)}% win rate`} icon="🎯" />
+            <StatCard label="P&L" value={`${summary.totalProfit >= 0 ? '+' : ''}$${summary.totalProfit.toFixed(0)}`} subtext={`${summary.roi.toFixed(1)}% ROI`} positive={summary.totalProfit >= 0} icon="💰" highlight />
+            <StatCard label="Max Drawdown" value={`$${summary.maxDrawdown.toFixed(0)}`} subtext="Peak to trough" icon="📉" />
+            <StatCard label="Avg CLV" value={summary.avgCLV !== null ? `${summary.avgCLV >= 0 ? '+' : ''}${summary.avgCLV.toFixed(2)}` : '—'} subtext="vs closing line" positive={summary.avgCLV !== null && summary.avgCLV >= 0} icon="⚡" />
           </div>
         )}
 
@@ -251,67 +244,43 @@ export default function PaperTradingPage() {
         {/* Tab Content */}
         {activeTab === 'recommendations' && (
           <div className="space-y-6">
-            {/* Info Banner */}
-            <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-emerald-500/10 to-transparent border border-emerald-500/20 rounded-xl">
-              <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center text-lg">
-                ✨
-              </div>
-              <div>
-                <p className="text-sm text-emerald-200 font-medium">
-                  PROD_V1 Selection — Top 10 by |edge|, excluding spreads 3-7
-                </p>
-                <p className="text-xs text-emerald-400/60 mt-0.5">
-                  Click "Take Bet" to log to your paper trading portfolio
-                </p>
-              </div>
-            </div>
-
             {recommendations.length === 0 ? (
               <EmptyState message="No recommendations available. Check back when games are scheduled." />
             ) : (
-              <div className="bg-zinc-900/40 border border-zinc-800/50 rounded-2xl overflow-hidden backdrop-blur-sm">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-zinc-800/50">
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wider">#</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wider">Matchup</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wider">Pick</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wider">Market</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wider">Model</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wider">Edge</th>
-                        <th className="px-6 py-4 text-right text-xs font-semibold text-zinc-500 uppercase tracking-wider">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-800/30">
-                      {recommendations.map((rec) => (
-                        <tr
-                          key={rec.event_id}
-                          className={`group transition-colors ${
-                            rec.already_bet
-                              ? 'bg-emerald-500/5'
-                              : 'hover:bg-zinc-800/30'
-                          }`}
-                        >
-                          <td className="px-6 py-5">
-                            <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-zinc-800 text-sm font-bold text-zinc-300">
-                              {rec.rank}
-                            </span>
-                          </td>
-                          <td className="px-6 py-5">
+              <div className="grid gap-4">
+                {recommendations.map((rec) => {
+                  const teamName = rec.side === 'home' ? rec.home_team : rec.away_team;
+                  const spreadDisplay = formatSpread(rec.market_spread_home, rec.side);
+                  const odds = rec.side === 'home' ? rec.spread_price_home : rec.spread_price_away;
+                  const stake = stakeAmounts[rec.event_id] || 100;
+                  const payout = calculatePayout(stake, odds);
+
+                  return (
+                    <div
+                      key={rec.event_id}
+                      className={`rounded-2xl border overflow-hidden transition-all ${
+                        rec.already_bet
+                          ? 'bg-emerald-500/5 border-emerald-500/30'
+                          : 'bg-zinc-900/40 border-zinc-800/50 hover:border-zinc-700'
+                      }`}
+                    >
+                      <div className="p-6">
+                        {/* Header Row */}
+                        <div className="flex items-start justify-between mb-6">
+                          <div className="flex items-center gap-4">
+                            <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-zinc-800 text-lg font-bold text-zinc-300">
+                              #{rec.rank}
+                            </div>
                             <div className="flex items-center gap-3">
                               <div className="flex -space-x-2">
-                                <TeamLogo name={rec.away_team} size="sm" />
-                                <TeamLogo name={rec.home_team} size="sm" />
+                                <TeamLogo name={rec.away_team} size="md" />
+                                <TeamLogo name={rec.home_team} size="md" />
                               </div>
                               <div>
-                                <div className="text-sm font-semibold text-white">
-                                  {rec.away_team}
+                                <div className="text-lg font-semibold text-white">
+                                  {rec.away_team} @ {rec.home_team}
                                 </div>
                                 <div className="text-sm text-zinc-500">
-                                  @ {rec.home_team}
-                                </div>
-                                <div className="text-xs text-zinc-600 mt-0.5">
                                   {new Date(rec.commence_time).toLocaleDateString('en-US', {
                                     weekday: 'short',
                                     month: 'short',
@@ -322,78 +291,116 @@ export default function PaperTradingPage() {
                                 </div>
                               </div>
                             </div>
-                          </td>
-                          <td className="px-6 py-5">
-                            <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg ${
-                              rec.side === 'home'
-                                ? 'bg-blue-500/20 border border-blue-500/30'
-                                : 'bg-purple-500/20 border border-purple-500/30'
-                            }`}>
-                              <TeamLogo name={rec.side === 'home' ? rec.home_team : rec.away_team} size="xs" />
-                              <span className={`text-sm font-medium ${
-                                rec.side === 'home' ? 'text-blue-300' : 'text-purple-300'
-                              }`}>
-                                {rec.side === 'home' ? rec.home_team : rec.away_team}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-5">
-                            <div className="text-sm font-mono font-semibold text-white">
-                              {formatSpread(rec.market_spread_home, rec.side)}
-                            </div>
-                            <div className="text-xs font-mono text-zinc-500">
-                              {formatPrice(rec.side === 'home' ? rec.spread_price_home : rec.spread_price_away)}
-                            </div>
-                          </td>
-                          <td className="px-6 py-5">
-                            <span className="text-sm font-mono text-zinc-400">
-                              {formatSpread(rec.model_spread_home, 'home')}
+                          </div>
+                          <div className={`px-3 py-1.5 rounded-lg ${
+                            rec.abs_edge >= 5
+                              ? 'bg-emerald-500/20 border border-emerald-500/30'
+                              : 'bg-zinc-800 border border-zinc-700'
+                          }`}>
+                            <span className={`text-sm font-bold ${rec.abs_edge >= 5 ? 'text-emerald-400' : 'text-white'}`}>
+                              +{rec.abs_edge.toFixed(1)} pts edge
                             </span>
-                          </td>
-                          <td className="px-6 py-5">
-                            <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md ${
-                              rec.abs_edge >= 5
-                                ? 'bg-emerald-500/20 border border-emerald-500/30'
-                                : 'bg-zinc-800'
-                            }`}>
-                              <span className={`text-sm font-bold tabular-nums ${
-                                rec.abs_edge >= 5 ? 'text-emerald-400' : 'text-white'
-                              }`}>
-                                +{rec.abs_edge.toFixed(1)}
-                              </span>
-                              <span className="text-xs text-zinc-500">pts</span>
+                          </div>
+                        </div>
+
+                        {/* THE BET - Clear and prominent */}
+                        <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-xl p-5 mb-6">
+                          <div className="text-xs text-zinc-500 uppercase tracking-wider mb-2">The Bet</div>
+                          <div className="flex items-center gap-4">
+                            <TeamLogo name={teamName} size="lg" />
+                            <div>
+                              <div className="text-2xl font-bold text-white">
+                                {teamName} {spreadDisplay}
+                              </div>
+                              <div className="flex items-center gap-3 mt-1">
+                                <span className={`text-lg font-semibold px-2 py-0.5 rounded ${
+                                  odds > 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-zinc-700 text-zinc-300'
+                                }`}>
+                                  {formatPrice(odds)}
+                                </span>
+                                <span className="text-zinc-500">on DraftKings</span>
+                              </div>
                             </div>
-                          </td>
-                          <td className="px-6 py-5 text-right">
-                            {rec.already_bet ? (
-                              <span className="inline-flex items-center gap-1.5 text-emerald-400 text-sm font-medium">
-                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                </svg>
-                                Logged
-                              </span>
-                            ) : (
+                          </div>
+                        </div>
+
+                        {/* Why This Bet */}
+                        <div className="grid grid-cols-3 gap-4 mb-6">
+                          <div className="bg-zinc-800/50 rounded-lg p-3 text-center">
+                            <div className="text-xs text-zinc-500 uppercase mb-1">Market Line</div>
+                            <div className="text-lg font-bold text-zinc-300">{formatSpread(rec.market_spread_home, 'home')}</div>
+                          </div>
+                          <div className="bg-zinc-800/50 rounded-lg p-3 text-center">
+                            <div className="text-xs text-zinc-500 uppercase mb-1">Our Model</div>
+                            <div className="text-lg font-bold text-white">{formatSpread(rec.model_spread_home, 'home')}</div>
+                          </div>
+                          <div className="bg-zinc-800/50 rounded-lg p-3 text-center">
+                            <div className="text-xs text-zinc-500 uppercase mb-1">Edge</div>
+                            <div className="text-lg font-bold text-emerald-400">+{rec.abs_edge.toFixed(1)} pts</div>
+                          </div>
+                        </div>
+
+                        {/* Stake & Payout Calculator */}
+                        {!rec.already_bet && (
+                          <div className="bg-zinc-800/30 rounded-xl p-4 border border-zinc-700/50">
+                            <div className="flex items-center justify-between gap-6">
+                              <div className="flex-1">
+                                <label className="text-xs text-zinc-500 uppercase tracking-wider block mb-2">
+                                  Your Stake
+                                </label>
+                                <div className="relative">
+                                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500">$</span>
+                                  <input
+                                    type="number"
+                                    value={stake}
+                                    onChange={(e) => updateStake(rec.event_id, e.target.value)}
+                                    className="w-full bg-zinc-900 border border-zinc-700 rounded-lg py-2.5 pl-8 pr-4 text-white font-semibold focus:outline-none focus:border-emerald-500"
+                                    min="1"
+                                  />
+                                </div>
+                              </div>
+                              <div className="text-center px-6">
+                                <div className="text-xs text-zinc-500 uppercase tracking-wider mb-1">To Win</div>
+                                <div className="text-2xl font-bold text-emerald-400">
+                                  ${payout.toFixed(0)}
+                                </div>
+                              </div>
+                              <div className="text-center px-6">
+                                <div className="text-xs text-zinc-500 uppercase tracking-wider mb-1">Total Return</div>
+                                <div className="text-2xl font-bold text-white">
+                                  ${(stake + payout).toFixed(0)}
+                                </div>
+                              </div>
                               <button
                                 onClick={() => placeBet(rec)}
                                 disabled={placingBet === rec.event_id}
-                                className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white text-sm font-semibold rounded-lg hover:from-emerald-500 hover:to-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30"
+                                className="px-8 py-3 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold rounded-xl hover:from-emerald-500 hover:to-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-emerald-500/20"
                               >
                                 {placingBet === rec.event_id ? (
                                   <span className="flex items-center gap-2">
-                                    <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                    Saving
+                                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    Logging...
                                   </span>
                                 ) : (
-                                  'Take Bet'
+                                  'Log Bet'
                                 )}
                               </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {rec.already_bet && (
+                          <div className="flex items-center justify-center gap-2 py-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
+                            <svg className="w-5 h-5 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                            <span className="text-emerald-400 font-semibold">Bet Logged</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -410,81 +417,76 @@ export default function PaperTradingPage() {
                     <thead>
                       <tr className="border-b border-zinc-800/50">
                         <th className="px-6 py-4 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wider">Date</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wider">Matchup</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wider">Position</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wider">Bet</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wider">Stake</th>
                         <th className="px-6 py-4 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wider">Edge</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wider">Close</th>
                         <th className="px-6 py-4 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wider">CLV</th>
                         <th className="px-6 py-4 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wider">Result</th>
                         <th className="px-6 py-4 text-right text-xs font-semibold text-zinc-500 uppercase tracking-wider">P&L</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-800/30">
-                      {bets.map((bet) => (
-                        <tr key={bet.id} className="group hover:bg-zinc-800/30 transition-colors">
-                          <td className="px-6 py-5 text-sm text-zinc-400 tabular-nums">
-                            {new Date(bet.bet_placed_at).toLocaleDateString('en-US', {
-                              month: 'short',
-                              day: 'numeric'
-                            })}
-                          </td>
-                          <td className="px-6 py-5">
-                            <div className="flex items-center gap-3">
-                              <div className="flex -space-x-2">
-                                <TeamLogo name={bet.events?.away_team?.name || 'Away'} size="sm" />
-                                <TeamLogo name={bet.events?.home_team?.name || 'Home'} size="sm" />
-                              </div>
-                              <div>
-                                <div className="text-sm font-medium text-white">
-                                  {bet.events?.away_team?.name || 'Away'} @ {bet.events?.home_team?.name || 'Home'}
+                      {bets.map((bet) => {
+                        const teamName = bet.side === 'home'
+                          ? bet.events?.home_team?.name
+                          : bet.events?.away_team?.name;
+                        return (
+                          <tr key={bet.id} className="group hover:bg-zinc-800/30 transition-colors">
+                            <td className="px-6 py-5 text-sm text-zinc-400 tabular-nums">
+                              {new Date(bet.bet_placed_at).toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric'
+                              })}
+                            </td>
+                            <td className="px-6 py-5">
+                              <div className="flex items-center gap-3">
+                                <TeamLogo name={teamName || 'Unknown'} size="sm" />
+                                <div>
+                                  <div className="text-sm font-semibold text-white">
+                                    {teamName} {formatSpread(bet.market_spread_home, bet.side as 'home' | 'away')}
+                                  </div>
+                                  <div className="text-xs text-zinc-500">
+                                    {formatPrice(bet.spread_price_american)} • Week {bet.week}
+                                  </div>
                                 </div>
-                                <div className="text-xs text-zinc-500">Week {bet.week}</div>
                               </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-5">
-                            <div className="text-sm font-mono font-semibold text-white">
-                              {bet.side.toUpperCase()} {formatSpread(bet.market_spread_home, bet.side as 'home' | 'away')}
-                            </div>
-                            <div className="text-xs font-mono text-zinc-500">
-                              {formatPrice(bet.spread_price_american)}
-                            </div>
-                          </td>
-                          <td className="px-6 py-5">
-                            <span className="text-sm font-bold text-emerald-400 tabular-nums">
-                              +{Math.abs(bet.edge_points).toFixed(1)}
-                            </span>
-                          </td>
-                          <td className="px-6 py-5 text-sm font-mono text-zinc-400">
-                            {bet.closing_spread_home !== null ? formatSpread(bet.closing_spread_home, 'home') : '—'}
-                          </td>
-                          <td className="px-6 py-5">
-                            {bet.clv_points !== null ? (
-                              <span className={`text-sm font-bold tabular-nums ${
-                                bet.clv_points >= 0 ? 'text-emerald-400' : 'text-red-400'
-                              }`}>
-                                {bet.clv_points >= 0 ? '+' : ''}{bet.clv_points.toFixed(1)}
+                            </td>
+                            <td className="px-6 py-5 text-sm font-medium text-white">
+                              ${bet.stake_amount}
+                            </td>
+                            <td className="px-6 py-5">
+                              <span className="text-sm font-bold text-emerald-400 tabular-nums">
+                                +{Math.abs(bet.edge_points).toFixed(1)}
                               </span>
-                            ) : (
-                              <span className="text-zinc-600">—</span>
-                            )}
-                          </td>
-                          <td className="px-6 py-5">
-                            <ResultBadge result={bet.result} />
-                          </td>
-                          <td className="px-6 py-5 text-right">
-                            {bet.profit_loss !== null ? (
-                              <span className={`text-sm font-bold tabular-nums ${
-                                bet.profit_loss >= 0 ? 'text-emerald-400' : 'text-red-400'
-                              }`}>
-                                {bet.profit_loss >= 0 ? '+' : ''}${bet.profit_loss.toFixed(0)}
-                              </span>
-                            ) : (
-                              <span className="text-zinc-600">—</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
+                            </td>
+                            <td className="px-6 py-5">
+                              {bet.clv_points !== null ? (
+                                <span className={`text-sm font-bold tabular-nums ${
+                                  bet.clv_points >= 0 ? 'text-emerald-400' : 'text-red-400'
+                                }`}>
+                                  {bet.clv_points >= 0 ? '+' : ''}{bet.clv_points.toFixed(1)}
+                                </span>
+                              ) : (
+                                <span className="text-zinc-600">—</span>
+                              )}
+                            </td>
+                            <td className="px-6 py-5">
+                              <ResultBadge result={bet.result} />
+                            </td>
+                            <td className="px-6 py-5 text-right">
+                              {bet.profit_loss !== null ? (
+                                <span className={`text-sm font-bold tabular-nums ${
+                                  bet.profit_loss >= 0 ? 'text-emerald-400' : 'text-red-400'
+                                }`}>
+                                  {bet.profit_loss >= 0 ? '+' : ''}${bet.profit_loss.toFixed(0)}
+                                </span>
+                              ) : (
+                                <span className="text-zinc-600">—</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -562,42 +564,6 @@ export default function PaperTradingPage() {
                 </div>
               </div>
             </div>
-
-            {/* Quick Stats */}
-            <div className="lg:col-span-2 bg-zinc-900/40 border border-zinc-800/50 rounded-2xl p-6 backdrop-blur-sm">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
-                  <span className="text-lg">📈</span>
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-white">Performance Metrics</h3>
-                  <p className="text-xs text-zinc-500">Rolling statistics</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <MetricCard
-                  label="Bankroll"
-                  value={summary ? `$${(1000 + summary.totalProfit).toFixed(0)}` : '$1,000'}
-                  subtext="Starting: $1,000"
-                />
-                <MetricCard
-                  label="Units Wagered"
-                  value={summary ? summary.totalBets.toString() : '0'}
-                  subtext="$100 per unit"
-                />
-                <MetricCard
-                  label="Weeks Active"
-                  value={summary ? Math.ceil(summary.totalBets / 10).toString() : '0'}
-                  subtext="~10 bets/week"
-                />
-                <MetricCard
-                  label="Profit Factor"
-                  value={summary && summary.losses > 0 ? (summary.wins / summary.losses).toFixed(2) : '—'}
-                  subtext="Wins / Losses"
-                />
-              </div>
-            </div>
           </div>
         )}
       </div>
@@ -640,9 +606,6 @@ function StatCard({
         </div>
         <span className="text-xl opacity-50">{icon}</span>
       </div>
-      {highlight && (
-        <div className="absolute inset-0 bg-gradient-to-t from-emerald-500/5 to-transparent pointer-events-none" />
-      )}
     </div>
   );
 }
@@ -695,16 +658,6 @@ function SpecItem({ label, value, highlight }: { label: string; value: string; h
   );
 }
 
-function MetricCard({ label, value, subtext }: { label: string; value: string; subtext: string }) {
-  return (
-    <div className="bg-zinc-800/50 rounded-xl p-4 border border-zinc-700/30">
-      <div className="text-xs text-zinc-500 uppercase tracking-wider mb-1">{label}</div>
-      <div className="text-xl font-bold text-white tabular-nums">{value}</div>
-      <div className="text-xs text-zinc-600 mt-1">{subtext}</div>
-    </div>
-  );
-}
-
 function EmptyState({ message }: { message: string }) {
   return (
     <div className="bg-zinc-900/40 border border-zinc-800/50 rounded-2xl p-12 text-center backdrop-blur-sm">
@@ -716,11 +669,10 @@ function EmptyState({ message }: { message: string }) {
   );
 }
 
-function TeamLogo({ name, size = 'md' }: { name: string; size?: 'xs' | 'sm' | 'md' | 'lg' }) {
+function TeamLogo({ name, size = 'md' }: { name: string; size?: 'sm' | 'md' | 'lg' }) {
   const sizeClasses = {
-    xs: 'w-5 h-5',
     sm: 'w-8 h-8',
-    md: 'w-10 h-10',
+    md: 'w-12 h-12',
     lg: 'w-14 h-14',
   };
 
@@ -736,7 +688,6 @@ function TeamLogo({ name, size = 'md' }: { name: string; size?: 'xs' | 'sm' | 'm
         alt={`${name} logo`}
         className="w-full h-full object-cover"
         onError={(e) => {
-          // Hide broken images
           (e.target as HTMLImageElement).style.display = 'none';
         }}
       />
