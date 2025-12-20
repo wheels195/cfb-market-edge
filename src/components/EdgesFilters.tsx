@@ -43,25 +43,8 @@ export function EdgesFilters({ currentFilter }: EdgesFiltersProps) {
             className="w-full rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100"
           >
             <option value="">All Books</option>
-            <optgroup label="Sharp Books">
-              <option value="pinnacle">Pinnacle</option>
-              <option value="lowvig">LowVig</option>
-            </optgroup>
-            <optgroup label="Major Retail">
-              <option value="draftkings">DraftKings</option>
-              <option value="fanduel">FanDuel</option>
-              <option value="betmgm">BetMGM</option>
-              <option value="espnbet">ESPN Bet</option>
-            </optgroup>
-            <optgroup label="Other Books">
-              <option value="betrivers">BetRivers</option>
-              <option value="bovada">Bovada</option>
-              <option value="betonlineag">BetOnline</option>
-              <option value="hardrockbet">Hard Rock Bet</option>
-              <option value="ballybet">Bally Bet</option>
-              <option value="betparx">BetParx</option>
-              <option value="fliff">Fliff</option>
-            </optgroup>
+            <option value="draftkings">DraftKings</option>
+            <option value="bovada">Bovada</option>
           </select>
         </div>
 

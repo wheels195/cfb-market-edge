@@ -7,6 +7,9 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || ''
 );
 
+// Only use reliable sportsbooks - matches materialize-edges-v2.ts
+const ALLOWED_SPORTSBOOKS = ['draftkings', 'bovada'];
+
 interface RecommendedBet {
   event_id: string;
   home_team: string;
@@ -52,12 +55,21 @@ export async function GET() {
 
     if (eventsError) throw eventsError;
 
-    // Get latest odds for these events
+    // Get allowed sportsbook IDs
+    const { data: allowedBooks } = await supabase
+      .from('sportsbooks')
+      .select('id, key')
+      .in('key', ALLOWED_SPORTSBOOKS);
+
+    const allowedBookIds = (allowedBooks || []).map(b => b.id);
+
+    // Get latest odds for these events (filtered to DraftKings & Bovada only)
     const eventIds = events?.map(e => e.id) || [];
     const { data: odds, error: oddsError } = await supabase
       .from('odds_ticks')
       .select('event_id, side, spread_points_home, price_american, captured_at')
       .in('event_id', eventIds)
+      .in('sportsbook_id', allowedBookIds)
       .eq('market_type', 'spread')
       .order('captured_at', { ascending: false });
 
