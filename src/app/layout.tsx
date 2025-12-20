@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "CFB Market-Edge",
-  description: "College Football betting decision support - find edges in spreads and totals",
+  description: "College Football betting decision support - find edges in spreads",
 };
 
 export default function RootLayout({
