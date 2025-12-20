@@ -129,19 +129,23 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
+    // Count before deleting
+    const { count } = await supabase
+      .from('paper_bets')
+      .select('id', { count: 'exact', head: true });
+
     // Delete all paper bets
-    const { error, count } = await supabase
+    const { error } = await supabase
       .from('paper_bets')
       .delete()
-      .neq('id', '00000000-0000-0000-0000-000000000000') // Delete all rows
-      .select('id', { count: 'exact', head: true });
+      .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all rows
 
     if (error) throw error;
 
     return NextResponse.json({
       success: true,
       message: 'All paper bets cleared',
-      deletedCount: count
+      deletedCount: count || 0
     });
   } catch (error) {
     console.error('Error clearing paper bets:', error);
