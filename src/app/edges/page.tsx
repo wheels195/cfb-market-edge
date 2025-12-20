@@ -72,7 +72,11 @@ export default function EdgesPage() {
                     </div>
                   </div>
                   <div className={`px-3 py-1 rounded-lg text-sm font-bold ${
-                    game.abs_edge >= 5 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-zinc-800 text-zinc-300'
+                    game.abs_edge >= 10
+                      ? 'bg-amber-500/20 text-amber-400'
+                      : game.abs_edge >= 5
+                        ? 'bg-emerald-500/20 text-emerald-400'
+                        : 'bg-zinc-800 text-zinc-400'
                   }`}>
                     {game.abs_edge.toFixed(1)} pts
                   </div>
@@ -96,9 +100,23 @@ export default function EdgesPage() {
                   </div>
                 </div>
 
-                {/* The Bet */}
-                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-4">
-                  <div className="text-xs text-emerald-400 uppercase mb-1">Bet</div>
+                {/* The Bet - Color coded */}
+                <div className={`rounded-lg p-4 border ${
+                  game.abs_edge >= 10
+                    ? 'bg-amber-500/15 border-amber-500/40'
+                    : game.abs_edge >= 5
+                      ? 'bg-emerald-500/10 border-emerald-500/30'
+                      : 'bg-zinc-800/50 border-zinc-700/50'
+                }`}>
+                  <div className={`text-xs uppercase mb-1 ${
+                    game.abs_edge >= 10
+                      ? 'text-amber-400'
+                      : game.abs_edge >= 5
+                        ? 'text-emerald-400'
+                        : 'text-zinc-500'
+                  }`}>
+                    {game.abs_edge >= 10 ? 'Strong Bet' : game.abs_edge >= 5 ? 'Good Bet' : 'Marginal'}
+                  </div>
                   <div className="text-xl font-bold text-white">
                     {betTeam} {betSpread} ({odds > 0 ? `+${odds}` : odds}) on DraftKings
                   </div>

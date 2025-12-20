@@ -278,11 +278,13 @@ export default function PaperTradingPage() {
                             </div>
                           </div>
                           <div className={`px-2 py-1 rounded text-xs font-bold ${
-                            rec.abs_edge >= 5
-                              ? 'bg-emerald-500/20 text-emerald-400'
-                              : 'bg-zinc-800 text-zinc-300'
+                            rec.abs_edge >= 10
+                              ? 'bg-amber-500/20 text-amber-400'
+                              : rec.abs_edge >= 5
+                                ? 'bg-emerald-500/20 text-emerald-400'
+                                : 'bg-zinc-800 text-zinc-400'
                           }`}>
-                            +{rec.abs_edge.toFixed(1)}
+                            {rec.abs_edge.toFixed(1)} pts
                           </div>
                         </div>
 
@@ -298,9 +300,23 @@ export default function PaperTradingPage() {
                           </div>
                         </div>
 
-                        {/* THE BET */}
-                        <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3 mb-3">
-                          <div className="text-xs text-emerald-400 uppercase tracking-wider mb-1">Bet</div>
+                        {/* THE BET - Color coded by edge strength */}
+                        <div className={`rounded-lg p-3 mb-3 border ${
+                          rec.abs_edge >= 10
+                            ? 'bg-amber-500/15 border-amber-500/40'
+                            : rec.abs_edge >= 5
+                              ? 'bg-emerald-500/10 border-emerald-500/30'
+                              : 'bg-zinc-800/50 border-zinc-700/50'
+                        }`}>
+                          <div className={`text-xs uppercase tracking-wider mb-1 ${
+                            rec.abs_edge >= 10
+                              ? 'text-amber-400'
+                              : rec.abs_edge >= 5
+                                ? 'text-emerald-400'
+                                : 'text-zinc-500'
+                          }`}>
+                            {rec.abs_edge >= 10 ? 'Strong Bet' : rec.abs_edge >= 5 ? 'Good Bet' : 'Marginal'}
+                          </div>
                           <div className="text-lg font-bold text-white">
                             {teamName} {spreadDisplay} ({formatPrice(odds)}) on DraftKings
                           </div>
