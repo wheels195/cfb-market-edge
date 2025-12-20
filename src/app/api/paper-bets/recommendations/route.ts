@@ -11,6 +11,8 @@ interface RecommendedBet {
   event_id: string;
   home_team: string;
   away_team: string;
+  home_rank: number | null;
+  away_rank: number | null;
   commence_time: string;
   side: 'home' | 'away';
   market_spread_home: number;
@@ -125,6 +127,33 @@ export async function GET() {
 
     console.log(`Loaded Elo for ${eloMap.size} teams from season ${eloData?.[0]?.season || 'unknown'}`);
 
+    // Fetch current CFP rankings from CFBD
+    const rankingsMap = new Map<string, number>();
+    try {
+      const cfbdKey = process.env.CFBD_API_KEY;
+      if (cfbdKey) {
+        const rankingsRes = await fetch(
+          `https://apinext.collegefootballdata.com/rankings?year=${season}`,
+          { headers: { 'Authorization': `Bearer ${cfbdKey}` } }
+        );
+        if (rankingsRes.ok) {
+          const rankingsData = await rankingsRes.json();
+          // Get most recent week's CFP rankings (prefer CFP over AP)
+          const latestWeek = rankingsData[rankingsData.length - 1];
+          const cfpPoll = latestWeek?.polls?.find((p: any) => p.poll === 'Playoff Committee Rankings')
+            || latestWeek?.polls?.find((p: any) => p.poll === 'AP Top 25');
+          if (cfpPoll) {
+            for (const team of cfpPoll.ranks) {
+              rankingsMap.set(team.school.toLowerCase(), team.rank);
+            }
+            console.log(`Loaded ${rankingsMap.size} team rankings from ${cfpPoll.poll} (Week ${latestWeek.week})`);
+          }
+        }
+      }
+    } catch (e) {
+      console.log('Could not fetch rankings:', e);
+    }
+
     // Check which events already have paper bets
     const { data: existingBets } = await supabase
       .from('paper_bets')
@@ -149,10 +178,15 @@ export async function GET() {
       // Apply PROD_V1 spread filter
       if (!passesSpreadFilter(odds.spreadHome)) continue;
 
+      const homeTeamName = (event.home_team as any)?.name || 'Unknown';
+      const awayTeamName = (event.away_team as any)?.name || 'Unknown';
+
       recommendations.push({
         event_id: event.id,
-        home_team: (event.home_team as any)?.name || 'Unknown',
-        away_team: (event.away_team as any)?.name || 'Unknown',
+        home_team: homeTeamName,
+        away_team: awayTeamName,
+        home_rank: rankingsMap.get(homeTeamName.toLowerCase()) || null,
+        away_rank: rankingsMap.get(awayTeamName.toLowerCase()) || null,
         commence_time: event.commence_time,
         side,
         market_spread_home: odds.spreadHome,
