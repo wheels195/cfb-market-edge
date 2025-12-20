@@ -89,19 +89,31 @@ export async function GET() {
     };
     const week = getWeek(today, season);
 
-    // Get Elo for teams
+    // Get Elo for teams - use latest available data
     const teamIds = new Set<string>();
     for (const e of events || []) {
       if (e.home_team_id) teamIds.add(e.home_team_id);
       if (e.away_team_id) teamIds.add(e.away_team_id);
     }
 
-    const { data: eloData } = await supabase
+    // First try current season, then fall back to previous season
+    let { data: eloData } = await supabase
       .from('team_elo_snapshots')
-      .select('team_id, elo, week')
+      .select('team_id, elo, week, season')
       .in('team_id', [...teamIds])
       .eq('season', season)
       .order('week', { ascending: false });
+
+    // If no data for current season, try previous season
+    if (!eloData || eloData.length === 0) {
+      const { data: prevSeasonData } = await supabase
+        .from('team_elo_snapshots')
+        .select('team_id, elo, week, season')
+        .in('team_id', [...teamIds])
+        .eq('season', season - 1)
+        .order('week', { ascending: false });
+      eloData = prevSeasonData;
+    }
 
     // Get latest Elo per team
     const eloMap = new Map<string, number>();
@@ -110,6 +122,8 @@ export async function GET() {
         eloMap.set(e.team_id, e.elo);
       }
     }
+
+    console.log(`Loaded Elo for ${eloMap.size} teams from season ${eloData?.[0]?.season || 'unknown'}`);
 
     // Check which events already have paper bets
     const { data: existingBets } = await supabase
