@@ -16,6 +16,7 @@
 import { supabase } from '@/lib/db/client';
 import { syncEvents, SyncEventsResult } from './sync-events';
 import { pollOdds, PollOddsResult } from './poll-odds';
+import { syncElo, SyncEloResult } from './sync-elo';
 import { runModel, RunModelResult } from './run-model';
 import { materializeEdges, MaterializeEdgesResult } from './materialize-edges';
 
@@ -29,6 +30,7 @@ export interface PipelineResult {
   steps: {
     syncEvents?: SyncEventsResult;
     pollOdds?: PollOddsResult;
+    syncElo?: SyncEloResult;
     runModel?: RunModelResult;
     materializeEdges?: MaterializeEdgesResult;
   };
@@ -43,6 +45,7 @@ export interface PipelineResult {
     totalMs: number;
     syncEventsMs?: number;
     pollOddsMs?: number;
+    syncEloMs?: number;
     runModelMs?: number;
     materializeEdgesMs?: number;
   };
@@ -113,6 +116,7 @@ async function checkCoverage(): Promise<{
 export async function runPipeline(options?: {
   skipSync?: boolean;
   skipPoll?: boolean;
+  skipElo?: boolean;
   skipModel?: boolean;
 }): Promise<PipelineResult> {
   const startTime = Date.now();
@@ -170,9 +174,28 @@ export async function runPipeline(options?: {
       }
     }
 
-    // Step 3: Run model / generate projections (unless skipped)
+    // Step 3: Sync Elo ratings (unless skipped)
+    if (!options?.skipElo) {
+      console.log('[Pipeline] Step 3: Syncing Elo ratings...');
+      const eloStart = Date.now();
+      try {
+        result.steps.syncElo = await runWithTimeout(
+          'syncElo',
+          syncElo,
+          CONFIG.STEP_TIMEOUT_MS * 2  // Elo sync may take time
+        );
+        result.timing.syncEloMs = Date.now() - eloStart;
+        console.log(`[Pipeline] Elo synced in ${result.timing.syncEloMs}ms`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unknown error';
+        result.errors.push(`syncElo: ${msg}`);
+        console.error(`[Pipeline] syncElo failed: ${msg}`);
+      }
+    }
+
+    // Step 4: Run model / generate projections (unless skipped)
     if (!options?.skipModel) {
-      console.log('[Pipeline] Step 3: Running model...');
+      console.log('[Pipeline] Step 4: Running model...');
       const modelStart = Date.now();
       try {
         result.steps.runModel = await runWithTimeout(
@@ -201,8 +224,8 @@ export async function runPipeline(options?: {
       return result;
     }
 
-    // Step 4: Materialize edges
-    console.log('[Pipeline] Step 4: Materializing edges...');
+    // Step 5: Materialize edges
+    console.log('[Pipeline] Step 5: Materializing edges...');
     const edgesStart = Date.now();
     try {
       result.steps.materializeEdges = await runWithTimeout(
@@ -240,6 +263,7 @@ export async function runEdgesOnly(): Promise<PipelineResult> {
   return runPipeline({
     skipSync: true,
     skipPoll: true,
+    skipElo: true,
     skipModel: true,
   });
 }

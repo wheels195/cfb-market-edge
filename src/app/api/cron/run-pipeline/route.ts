@@ -48,6 +48,11 @@ export async function GET(request: Request) {
         pollOdds: result.steps.pollOdds ? {
           ticksWritten: result.steps.pollOdds.ticksWritten,
         } : null,
+        syncElo: result.steps.syncElo ? {
+          season: result.steps.syncElo.season,
+          weeksProcessed: result.steps.syncElo.weeksProcessed,
+          teamsUpdated: result.steps.syncElo.teamsUpdated,
+        } : null,
         runModel: result.steps.runModel ? {
           ratingsUpdated: result.steps.runModel.ratingsUpdated,
           projectionsGenerated: result.steps.runModel.projectionsGenerated,
