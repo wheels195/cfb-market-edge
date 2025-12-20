@@ -13,7 +13,9 @@
 
 import { supabase } from '@/lib/db/client';
 import { DEFAULT_ELO_CONFIG } from './elo';
-import { getBowlGameAdjustment } from './conference-strength';
+import { calculateConferenceAdjustment, getBowlGameAdjustment } from './conference-strength';
+import { calculateSituationalAdjustment } from './situational';
+import { analyzeLineMovement } from './line-movement';
 
 // Model version names (must match database)
 export const MODEL_VERSIONS = {
@@ -211,6 +213,26 @@ async function generateMarketAnchoredProjection(
     .eq('id', eventId)
     .single();
 
+  // Get team names for conference adjustment
+  const { data: homeTeam } = await supabase
+    .from('teams')
+    .select('name')
+    .eq('id', homeTeamId)
+    .single();
+
+  const { data: awayTeam } = await supabase
+    .from('teams')
+    .select('name')
+    .eq('id', awayTeamId)
+    .single();
+
+  // Get a sportsbook ID for line movement analysis (prefer DraftKings)
+  const { data: sportsbook } = await supabase
+    .from('sportsbooks')
+    .select('id')
+    .eq('key', 'draftkings')
+    .single();
+
   // Get current market line (latest spread tick)
   const { data: latestTick } = await supabase
     .from('odds_ticks')
@@ -229,6 +251,8 @@ async function generateMarketAnchoredProjection(
 
   const marketBaseline = latestTick.spread_points_home;
   const gameDate = eventData?.commence_time ? new Date(eventData.commence_time) : new Date();
+  const homeTeamName = homeTeam?.name || '';
+  const awayTeamName = awayTeam?.name || '';
 
   // Calculate adjustments
   const adjustments = {
@@ -242,12 +266,33 @@ async function generateMarketAnchoredProjection(
   };
 
   try {
-    // Bowl game adjustment - reduce home field advantage for neutral sites
+    // 1. Bowl game adjustment - reduce home field advantage for neutral sites
     const bowlAdj = getBowlGameAdjustment(gameDate);
     adjustments.bowlGame = bowlAdj.isBowl ? -bowlAdj.homeFieldReduction : 0;
 
-    // Note: Conference, line movement, and situational adjustments disabled
-    // due to function signature mismatches. TODO: Fix and re-enable.
+    // 2. Conference strength adjustment (cross-conference games)
+    if (homeTeamName && awayTeamName) {
+      const confAdj = calculateConferenceAdjustment(homeTeamName, awayTeamName);
+      adjustments.conference = confAdj.adjustment * MARKET_ANCHORED_COEFFICIENTS.conferenceStrengthWeight;
+    }
+
+    // 3. Line movement / sharp money signals
+    if (sportsbook?.id) {
+      const lineMovement = await analyzeLineMovement(eventId, sportsbook.id, gameDate.toISOString());
+      // If sharp money is moving the line, follow it
+      adjustments.lineMovement = lineMovement.spreadAdjustment * MARKET_ANCHORED_COEFFICIENTS.sharpLineMovementWeight;
+    }
+
+    // 4. Situational factors (rest, travel, rivalry)
+    const situational = await calculateSituationalAdjustment(
+      eventId,
+      homeTeamId,
+      awayTeamId,
+      gameDate,
+      season
+    );
+    // Net situational adjustment (home advantage - away advantage)
+    adjustments.situational = (situational.homeAdjustment - situational.awayAdjustment) * 0.5;
 
   } catch (err) {
     // If any adjustment fails, continue with zeros
