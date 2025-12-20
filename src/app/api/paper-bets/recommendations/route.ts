@@ -98,12 +98,17 @@ export async function GET() {
       if (e.away_team_id) teamIds.add(e.away_team_id);
     }
 
+    // For bowl games (week > 13), CFBD's Elo data reverts to preseason values.
+    // Use Week 13 (end of regular season) as the cap for accurate ratings.
+    const maxWeekForElo = week > 13 ? 13 : week;
+
     // First try current season, then fall back to previous season
     let { data: eloData } = await supabase
       .from('team_elo_snapshots')
       .select('team_id, elo, week, season')
       .in('team_id', [...teamIds])
       .eq('season', season)
+      .lte('week', maxWeekForElo)
       .order('week', { ascending: false });
 
     // If no data for current season, try previous season
@@ -117,7 +122,7 @@ export async function GET() {
       eloData = prevSeasonData;
     }
 
-    // Get latest Elo per team
+    // Get latest Elo per team (up to maxWeekForElo)
     const eloMap = new Map<string, number>();
     for (const e of eloData || []) {
       if (!eloMap.has(e.team_id)) {
