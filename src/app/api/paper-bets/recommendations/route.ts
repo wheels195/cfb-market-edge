@@ -181,6 +181,10 @@ export async function GET() {
       const homeTeamName = (event.home_team as any)?.name || 'Unknown';
       const awayTeamName = (event.away_team as any)?.name || 'Unknown';
 
+      // Round to 1 decimal place for clean display
+      const roundedModelSpread = Math.round(modelSpreadHome * 10) / 10;
+      const roundedEdge = Math.round(edge * 10) / 10;
+
       recommendations.push({
         event_id: event.id,
         home_team: homeTeamName,
@@ -192,9 +196,9 @@ export async function GET() {
         market_spread_home: odds.spreadHome,
         spread_price_home: odds.priceHome,
         spread_price_away: odds.priceAway,
-        model_spread_home: modelSpreadHome,
-        edge_points: edge,
-        abs_edge: Math.abs(edge),
+        model_spread_home: roundedModelSpread,
+        edge_points: roundedEdge,
+        abs_edge: Math.abs(roundedEdge),
         rank: 0,
         already_bet: alreadyBet.has(event.id),
       });
