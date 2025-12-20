@@ -101,32 +101,148 @@ async function processEvent(event: OddsApiEvent, result: SyncEventsResult): Prom
 }
 
 /**
- * Ensure a team exists in the database, creating if necessary
+ * Known Odds API name -> CFBD name mappings for teams that use different names
+ * This allows us to find the canonical CFBD team when Odds API sends a mascot name
+ */
+const ODDS_API_TO_CFBD_NAME: Record<string, string> = {
+  'Alabama Crimson Tide': 'Alabama',
+  'Appalachian State Mountaineers': 'App State',
+  'Arizona State Sun Devils': 'Arizona State',
+  'Arizona Wildcats': 'Arizona',
+  'Army Black Knights': 'Army',
+  'BYU Cougars': 'BYU',
+  'California Golden Bears': 'California',
+  'Central Michigan Chippewas': 'Central Michigan',
+  'Cincinnati Bearcats': 'Cincinnati',
+  'Clemson Tigers': 'Clemson',
+  'Coastal Carolina Chanticleers': 'Coastal Carolina',
+  'Duke Blue Devils': 'Duke',
+  'East Carolina Pirates': 'East Carolina',
+  'Florida International Panthers': 'Florida International',
+  'Fresno State Bulldogs': 'Fresno State',
+  'Georgia Bulldogs': 'Georgia',
+  'Georgia Southern Eagles': 'Georgia Southern',
+  'Georgia Tech Yellow Jackets': 'Georgia Tech',
+  'Hawaii Rainbow Warriors': "Hawai'i",
+  'Houston Cougars': 'Houston',
+  'Illinois Fighting Illini': 'Illinois',
+  'Indiana Hoosiers': 'Indiana',
+  'Iowa Hawkeyes': 'Iowa',
+  'James Madison Dukes': 'James Madison',
+  'Louisiana Tech Bulldogs': 'Louisiana Tech',
+  'Louisville Cardinals': 'Louisville',
+  'LSU Tigers': 'LSU',
+  'Miami (OH) RedHawks': 'Miami (OH)',
+  'Miami Hurricanes': 'Miami',
+  'Michigan Wolverines': 'Michigan',
+  'Minnesota Golden Gophers': 'Minnesota',
+  'Mississippi State Bulldogs': 'Mississippi State',
+  'Missouri Tigers': 'Missouri',
+  'Navy Midshipmen': 'Navy',
+  'Nebraska Cornhuskers': 'Nebraska',
+  'New Mexico Lobos': 'New Mexico',
+  'North Texas Mean Green': 'North Texas',
+  'Northwestern Wildcats': 'Northwestern',
+  'Ohio Bobcats': 'Ohio',
+  'Ohio State Buckeyes': 'Ohio State',
+  'Ole Miss Rebels': 'Ole Miss',
+  'Oregon Ducks': 'Oregon',
+  'Penn State Nittany Lions': 'Penn State',
+  'Pittsburgh Panthers': 'Pittsburgh',
+  'Rice Owls': 'Rice',
+  'San Diego State Aztecs': 'San Diego State',
+  'SMU Mustangs': 'SMU',
+  'Southern Mississippi Golden Eagles': 'Southern Miss',
+  'TCU Horned Frogs': 'TCU',
+  'Tennessee Volunteers': 'Tennessee',
+  'Texas A&M Aggies': 'Texas A&M',
+  'Texas Longhorns': 'Texas',
+  'Texas State Bobcats': 'Texas State',
+  'Texas Tech Red Raiders': 'Texas Tech',
+  'Toledo Rockets': 'Toledo',
+  'Tulane Green Wave': 'Tulane',
+  'UConn Huskies': 'UConn',
+  'UNLV Rebels': 'UNLV',
+  'USC Trojans': 'USC',
+  'Utah State Aggies': 'Utah State',
+  'Utah Utes': 'Utah',
+  'UTSA Roadrunners': 'UTSA',
+  'Vanderbilt Commodores': 'Vanderbilt',
+  'Virginia Cavaliers': 'Virginia',
+  'Wake Forest Demon Deacons': 'Wake Forest',
+  'Washington State Cougars': 'Washington State',
+  'Western Kentucky Hilltoppers': 'Western Kentucky',
+};
+
+/**
+ * Ensure a team exists in the database, finding the canonical CFBD team
+ *
+ * Lookup priority:
+ * 1. Match by odds_api_name (canonical teams have this set after migration)
+ * 2. Match by name (for CFBD-style short names)
+ * 3. Use ODDS_API_TO_CFBD_NAME mapping to find CFBD team
+ * 4. Check team_aliases table
+ * 5. Create new team only if all lookups fail (should be rare for FBS teams)
  */
 async function ensureTeam(teamName: string, result: SyncEventsResult): Promise<string | null> {
-  // First check by odds_api_name or name
-  const { data: existingTeam } = await supabase
+  // 1. Check by odds_api_name (most common for canonical teams)
+  const { data: byOddsName } = await supabase
     .from('teams')
     .select('id')
-    .or(`name.eq.${teamName},odds_api_name.eq.${teamName}`)
-    .single();
+    .eq('odds_api_name', teamName)
+    .maybeSingle();
 
-  if (existingTeam) {
-    return existingTeam.id;
+  if (byOddsName) {
+    return byOddsName.id;
   }
 
-  // Check aliases
+  // 2. Check by exact name match
+  const { data: byName } = await supabase
+    .from('teams')
+    .select('id')
+    .eq('name', teamName)
+    .maybeSingle();
+
+  if (byName) {
+    return byName.id;
+  }
+
+  // 3. Try mapping to CFBD name and lookup
+  const cfbdName = ODDS_API_TO_CFBD_NAME[teamName];
+  if (cfbdName) {
+    const { data: byCfbdName } = await supabase
+      .from('teams')
+      .select('id')
+      .eq('name', cfbdName)
+      .maybeSingle();
+
+    if (byCfbdName) {
+      // Found the CFBD team - set the odds_api_name for future lookups
+      await supabase
+        .from('teams')
+        .update({ odds_api_name: teamName })
+        .eq('id', byCfbdName.id);
+
+      console.log(`Linked Odds API name "${teamName}" to CFBD team "${cfbdName}"`);
+      return byCfbdName.id;
+    }
+  }
+
+  // 4. Check aliases
   const { data: aliasMatch } = await supabase
     .from('team_aliases')
     .select('team_id')
     .eq('alias', teamName)
-    .single();
+    .maybeSingle();
 
   if (aliasMatch) {
     return aliasMatch.team_id;
   }
 
-  // Create new team
+  // 5. Create new team only if all lookups fail
+  // Log a warning since this shouldn't happen for known FBS teams
+  console.warn(`Creating new team for unknown Odds API name: "${teamName}"`);
+
   const { data: newTeam, error } = await supabase
     .from('teams')
     .insert({
