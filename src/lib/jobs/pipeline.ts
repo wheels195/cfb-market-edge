@@ -4,8 +4,14 @@
  * Runs the full pipeline in correct order:
  * 1. Sync upcoming events
  * 2. Poll odds for upcoming events
- * 3. Generate projections for events missing them
- * 4. Materialize edges
+ * 3. Sync Elo ratings from CFBD
+ * 4. Generate dual projections (MARKET_ANCHORED + ELO_RAW)
+ * 5. Materialize edges (READ from projections, don't generate)
+ *
+ * Architecture: PROJECTIONS ARE THE SINGLE SOURCE OF TRUTH
+ * - runModel generates both SPREADS_MARKET_ANCHORED_V1 and SPREADS_ELO_RAW_V1
+ * - materializeEdgesV2 reads projections by model_version_id
+ * - Edge computation happens ONLY in materialize-edges-v2
  *
  * Includes:
  * - Coverage gate (fail if projections < 95%)
@@ -18,7 +24,7 @@ import { syncEvents, SyncEventsResult } from './sync-events';
 import { pollOdds, PollOddsResult } from './poll-odds';
 import { syncElo, SyncEloResult } from './sync-elo';
 import { runModel, RunModelResult } from './run-model';
-import { materializeEdges, MaterializeEdgesResult } from './materialize-edges';
+import { materializeEdgesV2, MaterializeEdgesV2Result } from './materialize-edges-v2';
 
 const CONFIG = {
   COVERAGE_THRESHOLD: 0.95,  // 95% of events must have projections
@@ -32,7 +38,7 @@ export interface PipelineResult {
     pollOdds?: PollOddsResult;
     syncElo?: SyncEloResult;
     runModel?: RunModelResult;
-    materializeEdges?: MaterializeEdgesResult;
+    materializeEdges?: MaterializeEdgesV2Result;
   };
   coverage: {
     totalEvents: number;
@@ -68,6 +74,7 @@ async function runWithTimeout<T>(
 
 /**
  * Check projection coverage - fail if below threshold
+ * With dual model architecture, checks for MARKET_ANCHORED projections (primary model)
  */
 async function checkCoverage(): Promise<{
   totalEvents: number;
@@ -93,10 +100,19 @@ async function checkCoverage(): Promise<{
 
   const ids = (eventIds || []).map(e => e.id);
 
+  // Get market-anchored model version ID (primary model for betting)
+  const { data: marketAnchoredVersion } = await supabase
+    .from('model_versions')
+    .select('id')
+    .eq('name', 'SPREADS_MARKET_ANCHORED_V1')
+    .single();
+
+  // Count events with market-anchored projections (the ones used for edge calculation)
   const { count: withProjections } = await supabase
     .from('projections')
     .select('event_id', { count: 'exact', head: true })
-    .in('event_id', ids);
+    .in('event_id', ids)
+    .eq('model_version_id', marketAnchoredVersion?.id || '');
 
   const total = totalEvents || 0;
   const covered = withProjections || 0;
@@ -230,7 +246,7 @@ export async function runPipeline(options?: {
     try {
       result.steps.materializeEdges = await runWithTimeout(
         'materializeEdges',
-        materializeEdges,
+        materializeEdgesV2,
         CONFIG.STEP_TIMEOUT_MS * 2  // Edges get extra time
       );
       result.timing.materializeEdgesMs = Date.now() - edgesStart;

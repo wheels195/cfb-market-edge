@@ -4,10 +4,13 @@ import {
   getDefaultModelVersionId,
 } from '@/lib/models/elo';
 import {
-  generateProjection,
-  saveProjection,
   updateTeamStats,
 } from '@/lib/models/projections';
+import {
+  generateDualProjection,
+  saveDualProjections,
+  MODEL_VERSIONS,
+} from '@/lib/models/dual-projections';
 
 // Configuration
 const CONFIG = {
@@ -172,7 +175,8 @@ async function updateRatingsFromResults(
 }
 
 /**
- * Generate projections for upcoming events
+ * Generate DUAL projections for upcoming events
+ * Creates both SPREADS_MARKET_ANCHORED_V1 and SPREADS_ELO_RAW_V1 projections
  * LIMIT: Only processes events within LOOKAHEAD_DAYS, batched
  */
 async function generateProjectionsForUpcoming(
@@ -207,34 +211,50 @@ async function generateProjectionsForUpcoming(
 
   console.log(`[generateProjections] Found ${upcomingEvents.length} events (limited to ${CONFIG.BATCH_SIZE})`);
 
-  // Check which events already have projections
+  // Check which events already have BOTH projections (market-anchored and elo-raw)
   const eventIds = upcomingEvents.map(e => e.id);
   const { data: existingProjections } = await supabase
     .from('projections')
-    .select('event_id')
+    .select('event_id, model_version_id')
     .in('event_id', eventIds);
 
-  const existingEventIds = new Set((existingProjections || []).map(p => p.event_id));
-  const eventsNeedingProjections = upcomingEvents.filter(e => !existingEventIds.has(e.id));
+  // Count projections per event
+  const projectionCountByEvent = new Map<string, number>();
+  for (const p of existingProjections || []) {
+    projectionCountByEvent.set(p.event_id, (projectionCountByEvent.get(p.event_id) || 0) + 1);
+  }
 
-  console.log(`[generateProjections] ${existingEventIds.size} already have projections, ${eventsNeedingProjections.length} need projections`);
+  // Events need projection if they don't have both (2) projections
+  const eventsNeedingProjections = upcomingEvents.filter(e =>
+    (projectionCountByEvent.get(e.id) || 0) < 2
+  );
+
+  console.log(`[generateProjections] ${upcomingEvents.length - eventsNeedingProjections.length} already have dual projections, ${eventsNeedingProjections.length} need projections`);
 
   let generated = 0;
   for (const event of eventsNeedingProjections) {
     try {
-      const projection = await generateProjection(
+      // Generate DUAL projections (both market-anchored and elo-raw)
+      const dualProjection = await generateDualProjection(
         event.id,
         event.home_team_id,
         event.away_team_id,
-        season,
-        modelVersionId
+        season
       );
 
-      await saveProjection(projection, modelVersionId);
-      result.projectionsGenerated++;
+      await saveDualProjections(dualProjection);
+
+      // Count how many were actually saved
+      const savedCount = (dualProjection.marketAnchored ? 1 : 0) + (dualProjection.eloRaw ? 1 : 0);
+      result.projectionsGenerated += savedCount;
       generated++;
 
-      // Progress logging every 10 projections
+      // Log disagreement if significant
+      if (dualProjection.disagreementPoints && dualProjection.disagreementPoints > 5) {
+        console.log(`[generateProjections] LARGE DISAGREEMENT (${dualProjection.disagreementPoints.toFixed(1)} pts) for event ${event.id}`);
+      }
+
+      // Progress logging every 10 events
       if (generated % 10 === 0) {
         console.log(`[generateProjections] Generated ${generated}/${eventsNeedingProjections.length}`);
       }
@@ -244,5 +264,5 @@ async function generateProjectionsForUpcoming(
     }
   }
 
-  console.log(`[generateProjections] Completed: ${generated} projections generated`);
+  console.log(`[generateProjections] Completed: ${generated} events processed, ${result.projectionsGenerated} projections saved`);
 }
