@@ -324,19 +324,42 @@ export default function PaperTradingPage() {
                           </div>
                         </div>
 
-                        {/* Why This Bet */}
-                        <div className="grid grid-cols-3 gap-4 mb-6">
-                          <div className="bg-zinc-800/50 rounded-lg p-3 text-center">
-                            <div className="text-xs text-zinc-500 uppercase mb-1">Market Line</div>
-                            <div className="text-lg font-bold text-zinc-300">{formatSpread(rec.market_spread_home, 'home')}</div>
-                          </div>
-                          <div className="bg-zinc-800/50 rounded-lg p-3 text-center">
-                            <div className="text-xs text-zinc-500 uppercase mb-1">Our Model</div>
-                            <div className="text-lg font-bold text-white">{formatSpread(rec.model_spread_home, 'home')}</div>
-                          </div>
-                          <div className="bg-zinc-800/50 rounded-lg p-3 text-center">
-                            <div className="text-xs text-zinc-500 uppercase mb-1">Edge</div>
-                            <div className="text-lg font-bold text-emerald-400">+{rec.abs_edge.toFixed(1)} pts</div>
+                        {/* Why This Bet - Explained */}
+                        <div className="bg-zinc-800/30 rounded-xl p-4 mb-6 border border-zinc-700/30">
+                          <div className="text-xs text-zinc-500 uppercase tracking-wider mb-3">Why This Bet?</div>
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm text-zinc-400">DraftKings says:</span>
+                              <span className="text-sm font-semibold text-zinc-300">
+                                {rec.home_team} {formatSpread(rec.market_spread_home, 'home')}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm text-zinc-400">Our model says:</span>
+                              <span className="text-sm font-semibold text-white">
+                                {rec.home_team} {formatSpread(rec.model_spread_home, 'home')}
+                              </span>
+                            </div>
+                            <div className="h-px bg-zinc-700/50" />
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm text-zinc-400">The market is off by:</span>
+                              <span className="text-sm font-bold text-emerald-400">
+                                {rec.abs_edge.toFixed(1)} points
+                              </span>
+                            </div>
+                            <div className="pt-2 text-sm text-zinc-500">
+                              {rec.side === 'away' ? (
+                                <>
+                                  The market has {rec.home_team} as too big of a favorite.
+                                  {rec.away_team} is getting <span className="text-emerald-400 font-semibold">{Math.abs(rec.market_spread_home - rec.model_spread_home).toFixed(1)} extra points</span> of value.
+                                </>
+                              ) : (
+                                <>
+                                  The market has {rec.home_team} as too big of an underdog.
+                                  {rec.home_team} is getting <span className="text-emerald-400 font-semibold">{Math.abs(rec.market_spread_home - rec.model_spread_home).toFixed(1)} extra points</span> of value.
+                                </>
+                              )}
+                            </div>
                           </div>
                         </div>
 
