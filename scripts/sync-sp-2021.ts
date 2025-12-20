@@ -159,7 +159,8 @@ async function main() {
 
   console.log('\nTop 5 2021 SP+ entries:');
   for (const s of sample || []) {
-    const teamName = (s.teams as { name: string })?.name || 'Unknown';
+    const teams = s.teams as { name: string }[] | null;
+    const teamName = teams?.[0]?.name || 'Unknown';
     console.log(`  ${teamName}: ${s.sp_overall?.toFixed(1)} (Off: ${s.sp_offense?.toFixed(1)}, Def: ${s.sp_defense?.toFixed(1)})`);
   }
 }
