@@ -286,42 +286,23 @@ export default function PaperTradingPage() {
                           </div>
                         </div>
 
-                        {/* THE BET - Compact */}
-                        <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-lg p-3 mb-3">
-                          <div className="flex items-center gap-3">
-                            <TeamLogo name={teamName} size="md" />
-                            <div className="flex-1 min-w-0">
-                              <div className="text-lg font-bold text-white truncate">
-                                {teamName} {spreadDisplay}
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span className={`text-sm font-semibold px-1.5 py-0.5 rounded ${
-                                  odds > 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-zinc-700 text-zinc-300'
-                                }`}>
-                                  {formatPrice(odds)}
-                                </span>
-                                <span className="text-xs text-zinc-500">DraftKings</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Why This Bet - Compact */}
-                        <div className="bg-zinc-800/30 rounded-lg p-3 mb-3 text-xs space-y-1.5">
-                          <div className="flex justify-between">
+                        {/* Line Analysis */}
+                        <div className="bg-zinc-800/50 rounded-lg p-3 mb-3 text-sm">
+                          <div className="flex justify-between mb-1">
                             <span className="text-zinc-500">Market:</span>
-                            <span className="text-zinc-300">{rec.home_team} {formatSpread(rec.market_spread_home, 'home')}</span>
+                            <span className="text-white font-medium">{rec.home_team} {formatSpread(rec.market_spread_home, 'home')}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-zinc-500">Model:</span>
-                            <span className="text-white">{rec.home_team} {formatSpread(rec.model_spread_home, 'home')}</span>
+                            <span className="text-white font-medium">{rec.home_team} {formatSpread(rec.model_spread_home, 'home')}</span>
                           </div>
-                          <div className="pt-1.5 border-t border-zinc-700/50 text-zinc-500">
-                            {rec.side === 'away' ? (
-                              <>{rec.away_team} getting <span className="text-emerald-400 font-semibold">{rec.abs_edge.toFixed(1)} pts</span> extra value</>
-                            ) : (
-                              <>{rec.home_team} getting <span className="text-emerald-400 font-semibold">{rec.abs_edge.toFixed(1)} pts</span> extra value</>
-                            )}
+                        </div>
+
+                        {/* THE BET */}
+                        <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3 mb-3">
+                          <div className="text-xs text-emerald-400 uppercase tracking-wider mb-1">Bet</div>
+                          <div className="text-lg font-bold text-white">
+                            {teamName} {spreadDisplay} ({formatPrice(odds)}) on DraftKings
                           </div>
                         </div>
 
