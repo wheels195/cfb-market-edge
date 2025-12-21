@@ -6,8 +6,79 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || ''
 );
 
+// CFBD API for rankings
+const CFBD_API_KEY = process.env.CFBD_API_KEY;
+const CFBD_BASE_URL = 'https://apinext.collegefootballdata.com';
+
 // Only use reliable sportsbooks
 const ALLOWED_SPORTSBOOKS = ['draftkings', 'bovada'];
+
+// Cache for rankings (5 minute TTL)
+let rankingsCache: { data: Map<number, number>; timestamp: number } | null = null;
+const RANKINGS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Fetch AP Top 25 rankings from CFBD API
+ * Returns a map of cfbd_team_id -> rank
+ */
+async function fetchAPRankings(): Promise<Map<number, number>> {
+  // Check cache first
+  if (rankingsCache && Date.now() - rankingsCache.timestamp < RANKINGS_CACHE_TTL) {
+    return rankingsCache.data;
+  }
+
+  const rankingMap = new Map<number, number>();
+
+  if (!CFBD_API_KEY) {
+    console.warn('[Rankings] CFBD_API_KEY not configured');
+    return rankingMap;
+  }
+
+  try {
+    // Determine season based on current date (bowl games run into January)
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth(); // 0-indexed
+    const season = currentMonth <= 1 ? currentYear - 1 : currentYear;
+
+    // Try postseason first, then regular season
+    for (const seasonType of ['postseason', 'regular']) {
+      const url = `${CFBD_BASE_URL}/rankings?year=${season}&seasonType=${seasonType}`;
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${CFBD_API_KEY}`,
+          'Accept': 'application/json',
+        },
+        next: { revalidate: 300 }, // Cache for 5 minutes
+      });
+
+      if (!response.ok) continue;
+
+      const data = await response.json();
+      if (!data || data.length === 0) continue;
+
+      // Get the most recent week's rankings
+      const latestRankings = data[data.length - 1];
+
+      // Find AP Top 25 poll
+      const apPoll = latestRankings.polls?.find((p: { poll: string }) => p.poll === 'AP Top 25');
+      if (apPoll && apPoll.ranks) {
+        for (const team of apPoll.ranks) {
+          rankingMap.set(team.teamId, team.rank);
+        }
+        console.log(`[Rankings] Loaded ${rankingMap.size} AP rankings for ${season} ${seasonType}`);
+        break; // Found rankings, stop looking
+      }
+    }
+
+    // Update cache
+    rankingsCache = { data: rankingMap, timestamp: Date.now() };
+  } catch (err) {
+    console.error('[Rankings] Failed to fetch:', err);
+  }
+
+  return rankingMap;
+}
 
 // Elo model constants
 const ELO_DIVISOR = 25;
@@ -106,6 +177,9 @@ export async function GET(request: NextRequest) {
     const startDate = new Date(now.getTime() - daysBack * 24 * 60 * 60 * 1000);
     const endDate = new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000);
 
+    // Fetch AP rankings (cached)
+    const apRankings = await fetchAPRankings();
+
     // Get events within date range
     const { data: events, error: eventsError } = await supabase
       .from('events')
@@ -116,8 +190,8 @@ export async function GET(request: NextRequest) {
         home_team_id,
         away_team_id,
         cfbd_game_id,
-        home_team:teams!events_home_team_id_fkey(id, name),
-        away_team:teams!events_away_team_id_fkey(id, name)
+        home_team:teams!events_home_team_id_fkey(id, name, cfbd_team_id),
+        away_team:teams!events_away_team_id_fkey(id, name, cfbd_team_id)
       `)
       .gte('commence_time', startDate.toISOString())
       .lte('commence_time', endDate.toISOString())
@@ -315,6 +389,12 @@ export async function GET(request: NextRequest) {
       const homeTeamName = homeTeam?.name || 'Home';
       const awayTeamName = awayTeam?.name || 'Away';
 
+      // Get AP rankings for teams (if ranked)
+      const homeCfbdId = homeTeam?.cfbd_team_id ? parseInt(homeTeam.cfbd_team_id) : null;
+      const awayCfbdId = awayTeam?.cfbd_team_id ? parseInt(awayTeam.cfbd_team_id) : null;
+      const homeRank = homeCfbdId ? apRankings.get(homeCfbdId) ?? null : null;
+      const awayRank = awayCfbdId ? apRankings.get(awayCfbdId) ?? null : null;
+
       const isCompleted = event.status === 'final' || (result?.home_score !== null && result?.home_score !== undefined);
 
       // For completed games with locked predictions, use those
@@ -385,8 +465,8 @@ export async function GET(request: NextRequest) {
         away_team: awayTeamName,
         home_team_id: event.home_team_id,
         away_team_id: event.away_team_id,
-        home_rank: null,
-        away_rank: null,
+        home_rank: homeRank,
+        away_rank: awayRank,
         commence_time: event.commence_time,
         status: event.status || 'scheduled',
         // Live odds

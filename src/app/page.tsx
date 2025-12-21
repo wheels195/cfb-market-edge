@@ -69,6 +69,19 @@ function formatGameTime(dateStr: string): string {
   return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
+function TeamName({ name, rank }: { name: string; rank: number | null }) {
+  const shortName = getShortName(name);
+  if (rank) {
+    return (
+      <>
+        <span className="text-amber-400 font-bold text-[10px] mr-0.5">#{rank}</span>
+        {shortName}
+      </>
+    );
+  }
+  return <>{shortName}</>;
+}
+
 export default function HomePage() {
   const [games, setGames] = useState<GameData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -253,7 +266,7 @@ export default function HomePage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium text-white truncate">
-                        {getShortName(game.away_team)} @ {getShortName(game.home_team)}
+                        <TeamName name={game.away_team} rank={game.away_rank} /> @ <TeamName name={game.home_team} rank={game.home_rank} />
                       </div>
                       <div className="text-xs text-zinc-500">{formatGameTime(game.commence_time)}</div>
                     </div>
@@ -308,7 +321,7 @@ export default function HomePage() {
                         </div>
                         <div>
                           <div className="text-sm font-medium text-white">
-                            {getShortName(game.away_team)} @ {getShortName(game.home_team)}
+                            <TeamName name={game.away_team} rank={game.away_rank} /> @ <TeamName name={game.home_team} rank={game.home_rank} />
                           </div>
                           <div className="text-xs text-zinc-500">
                             {new Date(game.commence_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
@@ -400,7 +413,7 @@ export default function HomePage() {
                       </div>
                       <div>
                         <div className="text-sm font-medium text-white">
-                          {getShortName(game.away_team)} @ {getShortName(game.home_team)}
+                          <TeamName name={game.away_team} rank={game.away_rank} /> @ <TeamName name={game.home_team} rank={game.home_rank} />
                         </div>
                         <div className="text-xs text-zinc-500">{formatGameTime(game.commence_time)}</div>
                       </div>
