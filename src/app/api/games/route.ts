@@ -410,7 +410,17 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    return NextResponse.json({ games });
+    // Filter out completed games that don't have model predictions
+    // (games we couldn't track because we didn't have data at the time)
+    const filteredGames = games.filter(game => {
+      const isCompleted = game.status === 'final' || game.home_score !== null;
+      if (isCompleted && !game.recommended_bet && !game.model_spread_home) {
+        return false; // Skip completed games without predictions
+      }
+      return true;
+    });
+
+    return NextResponse.json({ games: filteredGames });
   } catch (error) {
     console.error('Games API error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
