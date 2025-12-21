@@ -73,6 +73,7 @@ interface GameResponse {
   side: 'home' | 'away' | null;
   spread_price_home: number | null;
   spread_price_away: number | null;
+  sportsbook: string | null;
   // Closing/locked odds (for completed games)
   closing_spread_home: number | null;
   closing_model_spread: number | null;
@@ -142,6 +143,12 @@ export async function GET(request: NextRequest) {
 
     const sportsbookIds = sportsbooks?.map(s => s.id) || [];
 
+    // Create sportsbook ID to key mapping
+    const sportsbookKeyById = new Map<string, string>();
+    for (const sb of sportsbooks || []) {
+      sportsbookKeyById.set(sb.id, sb.key);
+    }
+
     // Get latest edges for upcoming games (only from allowed sportsbooks)
     const { data: edges } = await supabase
       .from('edges')
@@ -151,11 +158,14 @@ export async function GET(request: NextRequest) {
       .eq('market_type', 'spread');
 
     // Create map of event_id -> best edge (highest absolute edge from allowed books)
-    const edgeByEvent = new Map<string, EdgeData>();
+    const edgeByEvent = new Map<string, EdgeData & { sportsbook_key: string }>();
     for (const edge of (edges || []) as EdgeData[]) {
       const existing = edgeByEvent.get(edge.event_id);
       if (!existing || Math.abs(edge.edge_points || 0) > Math.abs(existing.edge_points || 0)) {
-        edgeByEvent.set(edge.event_id, edge);
+        edgeByEvent.set(edge.event_id, {
+          ...edge,
+          sportsbook_key: sportsbookKeyById.get(edge.sportsbook_id) || 'unknown'
+        });
       }
     }
 
@@ -364,6 +374,11 @@ export async function GET(request: NextRequest) {
         }
       }
 
+      // Format sportsbook name for display
+      const sportsbookDisplay = edge?.sportsbook_key === 'draftkings' ? 'DK' :
+                                edge?.sportsbook_key === 'bovada' ? 'Bovada' :
+                                edge?.sportsbook_key || null;
+
       return {
         event_id: event.id,
         home_team: homeTeamName,
@@ -382,6 +397,7 @@ export async function GET(request: NextRequest) {
         side,
         spread_price_home: edge?.market_price_american ?? null,
         spread_price_away: edge?.market_price_american ? -edge.market_price_american : null,
+        sportsbook: sportsbookDisplay,
         // Closing odds
         closing_spread_home: closing?.spread_points_home ?? null,
         closing_model_spread: modelSpreadHome,

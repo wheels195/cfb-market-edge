@@ -20,6 +20,7 @@ interface GameData {
   abs_edge: number | null;
   side: 'home' | 'away' | null;
   spread_price_home: number | null;
+  sportsbook: string | null;
   closing_spread_home: number | null;
   closing_model_spread: number | null;
   home_score: number | null;
@@ -262,7 +263,7 @@ export default function HomePage() {
                     <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Model Pick</div>
                     <div className="text-sm font-bold text-emerald-400">{game.recommended_bet}</div>
                     <div className="flex items-center gap-4 mt-2 text-xs text-zinc-500">
-                      <span>Market: {formatSpread(game.market_spread_home || 0)}</span>
+                      <span>{game.sportsbook || 'Market'}: {formatSpread(game.market_spread_home || 0)}</span>
                       <span>Model: {formatSpread(game.model_spread_home || 0)}</span>
                     </div>
                   </div>
@@ -415,7 +416,7 @@ export default function HomePage() {
                     <div className="flex items-center justify-between pt-3 border-t border-zinc-800/50">
                       <div className="flex items-center gap-4 text-xs">
                         <div>
-                          <span className="text-zinc-500">Market: </span>
+                          <span className="text-zinc-500">{game.sportsbook || 'Market'}: </span>
                           <span className="text-emerald-400 font-medium">{formatSpread(game.market_spread_home || 0)}</span>
                         </div>
                         <div>
