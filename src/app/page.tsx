@@ -171,10 +171,16 @@ export default function HomePage() {
                 All Games
               </Link>
               <Link
-                href="/edges"
+                href="/paper-trading"
+                className="px-4 py-2 text-sm font-medium text-zinc-400 hover:text-white transition-colors"
+              >
+                Paper Trading
+              </Link>
+              <Link
+                href="/backtest"
                 className="px-4 py-2 text-sm font-medium bg-zinc-800/50 text-white rounded-lg hover:bg-zinc-800 transition-colors"
               >
-                Edge Finder
+                Backtest
               </Link>
             </div>
           </nav>
@@ -238,7 +244,7 @@ export default function HomePage() {
                   {topEdges.length} plays
                 </span>
               </div>
-              <Link href="/edges" className="text-sm text-zinc-500 hover:text-white transition-colors">
+              <Link href="/games" className="text-sm text-zinc-500 hover:text-white transition-colors">
                 View all →
               </Link>
             </div>
