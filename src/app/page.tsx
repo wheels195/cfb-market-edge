@@ -276,8 +276,8 @@ export default function HomePage() {
                     <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Model Pick</div>
                     <div className="text-sm font-bold text-emerald-400">{game.recommended_bet}</div>
                     <div className="flex items-center gap-4 mt-2 text-xs text-zinc-500">
-                      <span>{game.sportsbook || 'Market'}: {formatSpread(game.market_spread_home || 0)}</span>
-                      <span>Model: {formatSpread(game.model_spread_home || 0)}</span>
+                      <span>Live ({game.sportsbook || 'Market'}): {getShortName(game.home_team)} {formatSpread(game.market_spread_home || 0)}</span>
+                      <span>Model: {getShortName(game.home_team)} {formatSpread(game.model_spread_home || 0)}</span>
                     </div>
                   </div>
                 </div>
@@ -357,12 +357,12 @@ export default function HomePage() {
                           <div className="text-zinc-600">|</div>
                           <div>
                             <span className="text-zinc-500">Close: </span>
-                            <span className="text-zinc-300">{formatSpread(game.closing_spread_home || 0)}</span>
+                            <span className="text-zinc-300">{getShortName(game.home_team)} {formatSpread(game.closing_spread_home || 0)}</span>
                           </div>
                           <div className="text-zinc-600">|</div>
                           <div>
                             <span className="text-zinc-500">Model: </span>
-                            <span className="text-blue-400">{formatSpread(game.model_spread_home || 0)}</span>
+                            <span className="text-blue-400">{getShortName(game.home_team)} {formatSpread(game.model_spread_home || 0)}</span>
                           </div>
                         </div>
                         {game.abs_edge !== null && (
@@ -429,12 +429,12 @@ export default function HomePage() {
                     <div className="flex items-center justify-between pt-3 border-t border-zinc-800/50">
                       <div className="flex items-center gap-4 text-xs">
                         <div>
-                          <span className="text-zinc-500">{game.sportsbook || 'Market'}: </span>
-                          <span className="text-emerald-400 font-medium">{formatSpread(game.market_spread_home || 0)}</span>
+                          <span className="text-zinc-500">Live ({game.sportsbook || 'Market'}): </span>
+                          <span className="text-emerald-400 font-medium">{getShortName(game.home_team)} {formatSpread(game.market_spread_home || 0)}</span>
                         </div>
                         <div>
                           <span className="text-zinc-500">Model: </span>
-                          <span className="text-blue-400 font-medium">{formatSpread(game.model_spread_home || 0)}</span>
+                          <span className="text-blue-400 font-medium">{getShortName(game.home_team)} {formatSpread(game.model_spread_home || 0)}</span>
                         </div>
                       </div>
                       <div className="text-xs font-medium text-white bg-zinc-800 px-2 py-1 rounded">
