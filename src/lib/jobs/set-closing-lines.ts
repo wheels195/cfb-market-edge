@@ -256,5 +256,5 @@ async function lockGamePrediction(
   }
 
   result.predictionsLocked++;
-  console.log(`[SetClosing] Locked prediction for event ${eventId}: ${edge.recommended_bet}`);
+  console.log(`[SetClosing] Locked prediction for event ${eventId}: ${edge.recommended_bet_label}`);
 }
