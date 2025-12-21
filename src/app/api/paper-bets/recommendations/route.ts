@@ -28,10 +28,10 @@ interface RecommendedBet {
   already_bet: boolean;
 }
 
-// PROD_V1_LOCKED filter: exclude spreads 3-7
+// Spread filter disabled - track all games in paper trading to evaluate performance
+// across different spread ranges
 function passesSpreadFilter(spread: number): boolean {
-  const absSpread = Math.abs(spread);
-  return absSpread <= 3 || absSpread >= 7;
+  return true; // Show all spreads
 }
 
 export async function GET() {
@@ -221,14 +221,14 @@ export async function GET() {
       });
     }
 
-    // Sort by absolute edge and take top 10
+    // Sort by absolute edge (highest first) and rank all games
     recommendations.sort((a, b) => b.abs_edge - a.abs_edge);
-    const top10 = recommendations.slice(0, 10).map((r, i) => ({ ...r, rank: i + 1 }));
+    const ranked = recommendations.map((r, i) => ({ ...r, rank: i + 1 }));
 
     return NextResponse.json({
       season,
       week,
-      recommendations: top10,
+      recommendations: ranked,
       total_eligible: recommendations.length,
     });
   } catch (error) {

@@ -20,8 +20,11 @@ interface GameData {
   abs_edge: number | null;
   side: 'home' | 'away' | null;
   spread_price_home: number | null;
+  spread_price_away: number | null;
   sportsbook: string | null;
   closing_spread_home: number | null;
+  closing_price_home: number | null;
+  closing_price_away: number | null;
   closing_model_spread: number | null;
   home_score: number | null;
   away_score: number | null;
@@ -55,6 +58,11 @@ function formatSpread(spread: number): string {
   if (spread > 0) return `+${spread}`;
   if (spread === 0) return 'PK';
   return `${spread}`;
+}
+
+function formatOdds(odds: number | null): string {
+  if (odds === null) return '-110';
+  return odds > 0 ? `+${odds}` : `${odds}`;
 }
 
 function formatGameTime(dateStr: string): string {
@@ -95,20 +103,6 @@ export default function HomePage() {
       })
       .catch(() => setLoading(false));
   }, []);
-
-  const stats = useMemo(() => {
-    const completed = games.filter(g => g.bet_result && g.recommended_bet);
-    const wins = completed.filter(g => g.bet_result === 'win').length;
-    const losses = completed.filter(g => g.bet_result === 'loss').length;
-    const pushes = completed.filter(g => g.bet_result === 'push').length;
-    const total = wins + losses;
-    const winRate = total > 0 ? (wins / total * 100).toFixed(1) : '0.0';
-    // Assuming -110 odds, calculate units
-    const units = wins * 0.91 - losses;
-    const roi = total > 0 ? ((units / total) * 100).toFixed(1) : '0.0';
-
-    return { wins, losses, pushes, total, winRate, units: units.toFixed(2), roi };
-  }, [games]);
 
   const completedGames = useMemo(() =>
     games.filter(g => g.status === 'final' || g.home_score !== null)
@@ -151,8 +145,8 @@ export default function HomePage() {
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-12">
           {/* Nav */}
-          <nav className="flex items-center justify-between mb-12">
-            <div className="flex items-center gap-3">
+          <nav className="flex items-center gap-8 mb-12">
+            <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
               <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
                 <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
@@ -162,73 +156,21 @@ export default function HomePage() {
                 <h1 className="text-xl font-bold text-white tracking-tight">CFB Edge</h1>
                 <p className="text-[10px] text-zinc-500 uppercase tracking-widest">Market Intelligence</p>
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Link
-                href="/games"
-                className="px-4 py-2 text-sm font-medium text-zinc-400 hover:text-white transition-colors"
-              >
-                All Games
-              </Link>
-              <Link
-                href="/paper-trading"
-                className="px-4 py-2 text-sm font-medium text-zinc-400 hover:text-white transition-colors"
-              >
-                Paper Trading
-              </Link>
-              <Link
-                href="/backtest"
-                className="px-4 py-2 text-sm font-medium bg-zinc-800/50 text-white rounded-lg hover:bg-zinc-800 transition-colors"
-              >
-                Backtest
-              </Link>
-            </div>
+            </Link>
+            <Link
+              href="/games"
+              className="text-sm font-medium text-zinc-400 hover:text-white transition-colors"
+            >
+              View All Games
+            </Link>
+            <Link
+              href="/model"
+              className="text-sm font-medium text-zinc-400 hover:text-white transition-colors"
+            >
+              Our Model
+            </Link>
           </nav>
 
-          {/* Stats Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-8">
-            <div className="bg-zinc-900/50 backdrop-blur border border-zinc-800/50 rounded-2xl p-4 md:p-6">
-              <div className="text-zinc-500 text-xs uppercase tracking-wider mb-2">Record</div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl md:text-3xl font-bold text-white">{stats.wins}-{stats.losses}</span>
-                {stats.pushes > 0 && <span className="text-zinc-500">({stats.pushes}P)</span>}
-              </div>
-              <div className="mt-2 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full transition-all duration-1000"
-                  style={{ width: `${stats.winRate}%` }}
-                />
-              </div>
-            </div>
-
-            <div className="bg-zinc-900/50 backdrop-blur border border-zinc-800/50 rounded-2xl p-4 md:p-6">
-              <div className="text-zinc-500 text-xs uppercase tracking-wider mb-2">Win Rate</div>
-              <div className="text-2xl md:text-3xl font-bold text-white">{stats.winRate}%</div>
-              <div className="text-xs text-zinc-500 mt-1">
-                {stats.total} bets tracked
-              </div>
-            </div>
-
-            <div className="bg-zinc-900/50 backdrop-blur border border-zinc-800/50 rounded-2xl p-4 md:p-6">
-              <div className="text-zinc-500 text-xs uppercase tracking-wider mb-2">Units</div>
-              <div className={`text-2xl md:text-3xl font-bold ${parseFloat(stats.units) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                {parseFloat(stats.units) >= 0 ? '+' : ''}{stats.units}
-              </div>
-              <div className="text-xs text-zinc-500 mt-1">
-                at -110 odds
-              </div>
-            </div>
-
-            <div className="bg-zinc-900/50 backdrop-blur border border-zinc-800/50 rounded-2xl p-4 md:p-6">
-              <div className="text-zinc-500 text-xs uppercase tracking-wider mb-2">ROI</div>
-              <div className={`text-2xl md:text-3xl font-bold ${parseFloat(stats.roi) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                {parseFloat(stats.roi) >= 0 ? '+' : ''}{stats.roi}%
-              </div>
-              <div className="text-xs text-zinc-500 mt-1">
-                per bet
-              </div>
-            </div>
-          </div>
         </div>
       </header>
 
@@ -279,12 +221,37 @@ export default function HomePage() {
                   </div>
 
                   <div className="bg-zinc-800/50 rounded-xl p-3">
-                    <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Model Pick</div>
-                    <div className="text-sm font-bold text-emerald-400">{game.recommended_bet}</div>
-                    <div className="flex items-center gap-4 mt-2 text-xs text-zinc-500">
-                      <span>Live ({game.sportsbook || 'Market'}): {getShortName(game.home_team)} {formatSpread(game.market_spread_home || 0)}</span>
-                      <span>Model: {getShortName(game.home_team)} {formatSpread(game.model_spread_home || 0)}</span>
+                    <div className="grid grid-cols-2 gap-2 mb-2 text-xs">
+                      <div className={`flex items-center justify-between px-2 py-1.5 rounded ${
+                        game.side === 'away' ? 'bg-emerald-500/20 border border-emerald-500/40' : 'bg-zinc-700/50'
+                      }`}>
+                        <span className="text-zinc-200">{getShortName(game.away_team)}</span>
+                        <span className={`font-mono ${game.side === 'away' ? 'text-emerald-300 font-bold' : 'text-zinc-400'}`}>
+                          {formatSpread(-(game.market_spread_home || 0))} ({formatOdds(game.spread_price_away)})
+                        </span>
+                      </div>
+                      <div className={`flex items-center justify-between px-2 py-1.5 rounded ${
+                        game.side === 'home' ? 'bg-emerald-500/20 border border-emerald-500/40' : 'bg-zinc-700/50'
+                      }`}>
+                        <span className="text-zinc-200">{getShortName(game.home_team)}</span>
+                        <span className={`font-mono ${game.side === 'home' ? 'text-emerald-300 font-bold' : 'text-zinc-400'}`}>
+                          {formatSpread(game.market_spread_home || 0)} ({formatOdds(game.spread_price_home)})
+                        </span>
+                      </div>
                     </div>
+                    {/* Model prediction */}
+                    {game.model_spread_home !== null && (
+                      <div className="flex items-center justify-between mb-2 text-xs border-t border-zinc-700/50 pt-2">
+                        <span className="text-zinc-500">Model:</span>
+                        <span className="text-blue-400 font-medium">
+                          {game.model_spread_home <= 0
+                            ? `${getShortName(game.home_team)} ${formatSpread(game.model_spread_home)}`
+                            : `${getShortName(game.away_team)} ${formatSpread(-game.model_spread_home)}`
+                          }
+                        </span>
+                      </div>
+                    )}
+                    <div className="text-sm font-bold text-emerald-400">{game.recommended_bet}</div>
                   </div>
                 </div>
               ))}
@@ -349,31 +316,57 @@ export default function HomePage() {
                       </div>
                     </div>
 
-                    {/* Model Pick */}
-                    {game.recommended_bet && (
-                      <div className="flex items-center justify-between pt-3 border-t border-zinc-800/50">
-                        <div className="flex items-center gap-4 text-xs">
-                          <div>
-                            <span className="text-zinc-500">Pick: </span>
-                            <span className={`font-medium ${
-                              game.bet_result === 'win' ? 'text-emerald-400' :
-                              game.bet_result === 'loss' ? 'text-red-400' : 'text-white'
-                            }`}>{game.recommended_bet}</span>
+                    {/* Closing Lines + Pick */}
+                    {(game.recommended_bet || game.closing_spread_home !== null) && (
+                      <div className="pt-3 border-t border-zinc-800/50">
+                        {/* Sportsbook-style lines */}
+                        {game.closing_spread_home !== null && (
+                          <div className="grid grid-cols-2 gap-2 mb-3 text-xs">
+                            <div className={`flex items-center justify-between px-2 py-1.5 rounded ${
+                              game.side === 'away' ? 'bg-emerald-500/10 border border-emerald-500/30' : 'bg-zinc-800/50'
+                            }`}>
+                              <span className="text-zinc-300">{getShortName(game.away_team)}</span>
+                              <span className={`font-mono ${game.side === 'away' ? 'text-emerald-400 font-bold' : 'text-zinc-400'}`}>
+                                {formatSpread(-(game.closing_spread_home || 0))} ({formatOdds(game.closing_price_away)})
+                              </span>
+                            </div>
+                            <div className={`flex items-center justify-between px-2 py-1.5 rounded ${
+                              game.side === 'home' ? 'bg-emerald-500/10 border border-emerald-500/30' : 'bg-zinc-800/50'
+                            }`}>
+                              <span className="text-zinc-300">{getShortName(game.home_team)}</span>
+                              <span className={`font-mono ${game.side === 'home' ? 'text-emerald-400 font-bold' : 'text-zinc-400'}`}>
+                                {formatSpread(game.closing_spread_home || 0)} ({formatOdds(game.closing_price_home)})
+                              </span>
+                            </div>
                           </div>
-                          <div className="text-zinc-600">|</div>
-                          <div>
-                            <span className="text-zinc-500">Close: </span>
-                            <span className="text-zinc-300">{getShortName(game.home_team)} {formatSpread(game.closing_spread_home || 0)}</span>
+                        )}
+                        {/* Model prediction */}
+                        {game.closing_model_spread !== null && (
+                          <div className="flex items-center justify-between mb-2 text-xs">
+                            <span className="text-zinc-500">Model:</span>
+                            <span className="text-blue-400 font-medium">
+                              {game.closing_model_spread <= 0
+                                ? `${getShortName(game.home_team)} ${formatSpread(game.closing_model_spread)}`
+                                : `${getShortName(game.away_team)} ${formatSpread(-game.closing_model_spread)}`
+                              }
+                            </span>
                           </div>
-                          <div className="text-zinc-600">|</div>
-                          <div>
-                            <span className="text-zinc-500">Model: </span>
-                            <span className="text-blue-400">{getShortName(game.home_team)} {formatSpread(game.model_spread_home || 0)}</span>
-                          </div>
-                        </div>
-                        {game.abs_edge !== null && (
-                          <div className="text-xs text-zinc-500">
-                            +{game.abs_edge.toFixed(1)} edge
+                        )}
+                        {/* Pick and Edge */}
+                        {game.recommended_bet && (
+                          <div className="flex items-center justify-between text-xs">
+                            <div>
+                              <span className="text-zinc-500">Pick: </span>
+                              <span className={`font-medium ${
+                                game.bet_result === 'win' ? 'text-emerald-400' :
+                                game.bet_result === 'loss' ? 'text-red-400' : 'text-white'
+                              }`}>{game.recommended_bet}</span>
+                            </div>
+                            {game.abs_edge !== null && (
+                              <div className="text-zinc-500">
+                                +{game.abs_edge.toFixed(1)} edge
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -402,10 +395,20 @@ export default function HomePage() {
             </div>
 
             <div className="space-y-3">
-              {upcomingGames.slice(0, 8).map((game) => (
+              {upcomingGames.slice(0, 8).map((game) => {
+                const hasEdge = game.abs_edge !== null && game.abs_edge >= 1.5;
+                const strongEdge = game.abs_edge !== null && game.abs_edge >= 2.5;
+
+                return (
                 <div
                   key={game.event_id}
-                  className="bg-zinc-900/50 border border-zinc-800/50 rounded-xl p-4 hover:border-zinc-700/50 transition-all"
+                  className={`rounded-xl p-4 transition-all ${
+                    strongEdge
+                      ? 'bg-gradient-to-br from-emerald-950/50 to-emerald-900/20 border-2 border-emerald-500/40'
+                      : hasEdge
+                      ? 'bg-zinc-900/50 border border-emerald-500/20'
+                      : 'bg-zinc-800/30 border border-zinc-700/30'
+                  }`}
                 >
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-3">
@@ -424,36 +427,89 @@ export default function HomePage() {
                         <div className="text-xs text-zinc-500">{formatGameTime(game.commence_time)}</div>
                       </div>
                     </div>
-                    {game.abs_edge !== null && game.abs_edge >= 2 && (
-                      <span className="px-2 py-1 bg-emerald-500/10 text-emerald-400 text-xs font-bold rounded-lg">
-                        +{game.abs_edge.toFixed(1)}
-                      </span>
+                    {/* Edge Badge */}
+                    {hasEdge ? (
+                      <div className={`px-3 py-1.5 rounded-lg ${
+                        strongEdge
+                          ? 'bg-emerald-500 text-black font-bold'
+                          : 'bg-emerald-500/20 text-emerald-400 font-semibold'
+                      }`}>
+                        <span className="text-xs">+{game.abs_edge?.toFixed(1)} EDGE</span>
+                      </div>
+                    ) : (
+                      <div className="px-3 py-1.5 bg-zinc-700/50 rounded-lg">
+                        <span className="text-xs text-zinc-400">NO EDGE</span>
+                      </div>
                     )}
                   </div>
 
-                  {game.recommended_bet ? (
-                    <div className="flex items-center justify-between pt-3 border-t border-zinc-800/50">
-                      <div className="flex items-center gap-4 text-xs">
-                        <div>
-                          <span className="text-zinc-500">Live ({game.sportsbook || 'Market'}): </span>
-                          <span className="text-emerald-400 font-medium">{getShortName(game.home_team)} {formatSpread(game.market_spread_home || 0)}</span>
+                  {game.market_spread_home !== null ? (
+                    <div className="pt-3 border-t border-zinc-700/50">
+                      {/* Sportsbook-style lines */}
+                      <div className="grid grid-cols-2 gap-2 mb-2 text-xs">
+                        <div className={`flex items-center justify-between px-2 py-1.5 rounded ${
+                          game.side === 'away' && hasEdge
+                            ? 'bg-emerald-500/20 border border-emerald-500/40'
+                            : 'bg-zinc-800/50'
+                        }`}>
+                          <span className="text-zinc-300">{getShortName(game.away_team)}</span>
+                          <span className={`font-mono ${
+                            game.side === 'away' && hasEdge ? 'text-emerald-400 font-bold' : 'text-zinc-400'
+                          }`}>
+                            {formatSpread(-(game.market_spread_home || 0))} ({formatOdds(game.spread_price_away)})
+                          </span>
                         </div>
-                        <div>
-                          <span className="text-zinc-500">Model: </span>
-                          <span className="text-blue-400 font-medium">{getShortName(game.home_team)} {formatSpread(game.model_spread_home || 0)}</span>
+                        <div className={`flex items-center justify-between px-2 py-1.5 rounded ${
+                          game.side === 'home' && hasEdge
+                            ? 'bg-emerald-500/20 border border-emerald-500/40'
+                            : 'bg-zinc-800/50'
+                        }`}>
+                          <span className="text-zinc-300">{getShortName(game.home_team)}</span>
+                          <span className={`font-mono ${
+                            game.side === 'home' && hasEdge ? 'text-emerald-400 font-bold' : 'text-zinc-400'
+                          }`}>
+                            {formatSpread(game.market_spread_home || 0)} ({formatOdds(game.spread_price_home)})
+                          </span>
                         </div>
                       </div>
-                      <div className="text-xs font-medium text-white bg-zinc-800 px-2 py-1 rounded">
-                        {game.recommended_bet}
-                      </div>
+                      {/* Model + Pick */}
+                      {game.recommended_bet && hasEdge ? (
+                        <div className="mt-2">
+                          {/* Model prediction */}
+                          {game.model_spread_home !== null && (
+                            <div className="flex items-center justify-between mb-2 text-xs">
+                              <span className="text-zinc-500">Model:</span>
+                              <span className="text-blue-400 font-medium">
+                                {game.model_spread_home <= 0
+                                  ? `${getShortName(game.home_team)} ${formatSpread(game.model_spread_home)}`
+                                  : `${getShortName(game.away_team)} ${formatSpread(-game.model_spread_home)}`
+                                }
+                              </span>
+                            </div>
+                          )}
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-zinc-500">via {game.sportsbook || 'DK'}</span>
+                            <div className={`font-bold px-3 py-1 rounded ${
+                              strongEdge ? 'bg-emerald-500 text-black' : 'bg-emerald-500/20 text-emerald-400'
+                            }`}>
+                              BET: {game.recommended_bet}
+                            </div>
+                          </div>
+                        </div>
+                      ) : !hasEdge && (
+                        <div className="text-xs text-zinc-500 text-center mt-2">
+                          Model agrees with market
+                        </div>
+                      )}
                     </div>
                   ) : (
-                    <div className="text-xs text-zinc-600 pt-3 border-t border-zinc-800/50">
-                      No edge detected
+                    <div className="text-xs text-zinc-600 pt-3 border-t border-zinc-700/50 text-center">
+                      Odds not available yet
                     </div>
                   )}
                 </div>
-              ))}
+              );
+              })}
             </div>
 
             {upcomingGames.length > 8 && (

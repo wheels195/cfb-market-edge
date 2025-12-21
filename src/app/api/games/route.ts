@@ -96,6 +96,8 @@ interface EdgeData {
 interface ClosingLineData {
   event_id: string;
   spread_points_home: number | null;
+  price_american: number | null;
+  side: string;
 }
 
 interface ResultData {
@@ -147,6 +149,8 @@ interface GameResponse {
   sportsbook: string | null;
   // Closing/locked odds (for completed games)
   closing_spread_home: number | null;
+  closing_price_home: number | null;
+  closing_price_away: number | null;
   closing_model_spread: number | null;
   // Results
   home_score: number | null;
@@ -251,12 +255,17 @@ export async function GET(request: NextRequest) {
       .in('sportsbook_id', sportsbookIds)
       .eq('market_type', 'spread');
 
-    // Create map of event_id -> closing line (prefer DraftKings)
-    const closingByEvent = new Map<string, ClosingLineData>();
+    // Create map of event_id -> closing lines (home and away sides)
+    const closingByEvent = new Map<string, { home: ClosingLineData | null; away: ClosingLineData | null }>();
     for (const cl of (closingLines || []) as ClosingLineData[]) {
-      const existing = closingByEvent.get(cl.event_id);
-      if (!existing) {
-        closingByEvent.set(cl.event_id, cl);
+      if (!closingByEvent.has(cl.event_id)) {
+        closingByEvent.set(cl.event_id, { home: null, away: null });
+      }
+      const existing = closingByEvent.get(cl.event_id)!;
+      if (cl.side === 'home') {
+        existing.home = cl;
+      } else if (cl.side === 'away') {
+        existing.away = cl;
       }
     }
 
@@ -409,7 +418,7 @@ export async function GET(request: NextRequest) {
       if (isCompleted && lockedPrediction) {
         // Use locked prediction data for completed games
         modelSpreadHome = lockedPrediction.model_spread_home;
-        marketSpread = lockedPrediction.closing_spread_home ?? closing?.spread_points_home ?? null;
+        marketSpread = lockedPrediction.closing_spread_home ?? closing?.home?.spread_points_home ?? null;
         edgePoints = lockedPrediction.edge_points;
         absEdge = edgePoints !== null ? Math.abs(edgePoints) : null;
         side = lockedPrediction.recommended_side === 'home' ? 'home' :
@@ -430,9 +439,9 @@ export async function GET(request: NextRequest) {
           const betSpreadStr = betSpread > 0 ? `+${betSpread}` : betSpread === 0 ? 'PK' : `${betSpread}`;
           recommendedBet = `${betTeam} ${betSpreadStr}`;
         }
-      } else if (isCompleted && closing) {
+      } else if (isCompleted && closing?.home) {
         // Completed game without locked prediction - just show closing line, no model data
-        marketSpread = closing.spread_points_home;
+        marketSpread = closing.home.spread_points_home;
         // Don't show fake model data for games we don't have predictions for
       }
 
@@ -479,7 +488,9 @@ export async function GET(request: NextRequest) {
         spread_price_away: edge?.market_price_american ? -edge.market_price_american : null,
         sportsbook: sportsbookDisplay,
         // Closing odds
-        closing_spread_home: closing?.spread_points_home ?? null,
+        closing_spread_home: closing?.home?.spread_points_home ?? null,
+        closing_price_home: closing?.home?.price_american ?? null,
+        closing_price_away: closing?.away?.price_american ?? null,
         closing_model_spread: modelSpreadHome,
         // Results
         home_score: result?.home_score ?? null,
