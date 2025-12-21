@@ -3,6 +3,7 @@ import { supabase } from '@/lib/db/client';
 export interface SetClosingLinesResult {
   eventsProcessed: number;
   linesSet: number;
+  predictionsLocked: number;
   skippedAlreadySet: number;
   errors: string[];
 }
@@ -20,6 +21,7 @@ export async function setClosingLines(): Promise<SetClosingLinesResult> {
   const result: SetClosingLinesResult = {
     eventsProcessed: 0,
     linesSet: 0,
+    predictionsLocked: 0,
     skippedAlreadySet: 0,
     errors: [],
   };
@@ -57,16 +59,28 @@ export async function setClosingLines(): Promise<SetClosingLinesResult> {
 
     const eventsWithClosings = new Set((existingClosings || []).map(c => c.event_id));
 
-    for (const event of events) {
-      // Skip if we already have at least one closing line for this event
-      // (the per-side check is still done in processEventClosingLines)
-      if (eventsWithClosings.has(event.id)) {
-        result.skippedAlreadySet++;
-        continue;
-      }
+    // Check which events already have game predictions
+    const { data: existingPredictions } = await supabase
+      .from('game_predictions')
+      .select('event_id')
+      .in('event_id', eventIds);
 
+    const eventsWithPredictions = new Set((existingPredictions || []).map(p => p.event_id));
+
+    for (const event of events) {
       try {
-        await processEventClosingLines(event.id, new Date(event.commence_time), result);
+        // Process closing lines if not already set
+        if (!eventsWithClosings.has(event.id)) {
+          await processEventClosingLines(event.id, new Date(event.commence_time), result);
+        } else {
+          result.skippedAlreadySet++;
+        }
+
+        // Lock model prediction if not already done
+        if (!eventsWithPredictions.has(event.id)) {
+          await lockGamePrediction(event.id, result);
+        }
+
         result.eventsProcessed++;
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
@@ -74,7 +88,7 @@ export async function setClosingLines(): Promise<SetClosingLinesResult> {
       }
     }
 
-    console.log(`[SetClosing] Complete: ${result.eventsProcessed} processed, ${result.linesSet} lines set, ${result.skippedAlreadySet} skipped`);
+    console.log(`[SetClosing] Complete: ${result.eventsProcessed} processed, ${result.linesSet} lines set, ${result.predictionsLocked} predictions locked, ${result.skippedAlreadySet} skipped`);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     result.errors.push(`Fetch failed: ${message}`);
@@ -166,4 +180,81 @@ async function setClosingLineForMarket(
 
   if (insertError) throw insertError;
   result.linesSet++;
+}
+
+/**
+ * Lock the model prediction for an event into game_predictions table
+ * This preserves what our model said at game time for historical tracking
+ */
+async function lockGamePrediction(
+  eventId: string,
+  result: SetClosingLinesResult
+): Promise<void> {
+  // Get the edge (model prediction) for this event
+  // Prefer DraftKings, fall back to any available
+  const { data: edges, error: edgeError } = await supabase
+    .from('edges')
+    .select(`
+      event_id,
+      sportsbook_id,
+      market_spread_home,
+      model_spread_home,
+      edge_points,
+      recommended_side,
+      recommended_bet_label
+    `)
+    .eq('event_id', eventId)
+    .eq('market_type', 'spread');
+
+  if (edgeError) throw edgeError;
+  if (!edges || edges.length === 0) {
+    console.log(`[SetClosing] No edge found for event ${eventId}`);
+    return;
+  }
+
+  // Get DraftKings sportsbook ID
+  const { data: dkBook } = await supabase
+    .from('sportsbooks')
+    .select('id')
+    .eq('key', 'draftkings')
+    .single();
+
+  // Prefer DraftKings edge, otherwise take first available
+  const edge = edges.find(e => e.sportsbook_id === dkBook?.id) || edges[0];
+
+  // Get closing line for this event/sportsbook
+  const { data: closingLine } = await supabase
+    .from('closing_lines')
+    .select('spread_points_home, price_american')
+    .eq('event_id', eventId)
+    .eq('sportsbook_id', edge.sportsbook_id)
+    .eq('market_type', 'spread')
+    .eq('side', 'home')
+    .single();
+
+  // Insert game prediction
+  const { error: insertError } = await supabase
+    .from('game_predictions')
+    .insert({
+      event_id: eventId,
+      sportsbook_id: edge.sportsbook_id,
+      closing_spread_home: closingLine?.spread_points_home ?? edge.market_spread_home,
+      closing_price_american: closingLine?.price_american,
+      model_spread_home: edge.model_spread_home,
+      edge_points: edge.edge_points,
+      recommended_side: edge.recommended_side,
+      recommended_bet: edge.recommended_bet_label,
+      locked_at: new Date().toISOString(),
+    });
+
+  if (insertError) {
+    // Ignore unique constraint violations (already exists)
+    if (insertError.code !== '23505') {
+      throw insertError;
+    }
+    return;
+  }
+
+  result.predictionsLocked++;
+  console.log(`[SetClosing] Locked prediction for event ${eventId}: ${edge.recommended_bet}`);
 }
