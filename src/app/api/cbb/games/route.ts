@@ -116,16 +116,15 @@ export async function GET(request: Request) {
         .order('start_date', { ascending: true })
         .limit(500); // Override limit to catch all qualifiers
     } else if (filter === 'completed') {
-      // Completed games - only show games that have predictions stored
-      // This ensures we only show results we can actually grade
+      // Completed games - fetch more to filter for qualifying bets with results
       query = query
         .or('home_score.neq.0,away_score.neq.0')
-        .not('cbb_game_predictions', 'is', null)
-        .order('start_date', { ascending: false });
+        .order('start_date', { ascending: false })
+        .limit(500); // Fetch more to find qualifying bets
     }
 
-    // Don't override limit for 'bets' filter (already set to 500)
-    if (filter !== 'bets') {
+    // Don't override limit for 'bets' and 'completed' filters (already set to 500)
+    if (filter !== 'bets' && filter !== 'completed') {
       query = query.limit(limit);
     }
 
@@ -226,10 +225,13 @@ export async function GET(request: Request) {
       };
     });
 
-    // Filter for bets if requested
+    // Filter based on requested view
     let filteredResult = result;
     if (filter === 'bets') {
       filteredResult = result.filter(g => g.qualifies_for_bet);
+    } else if (filter === 'completed') {
+      // Only show qualifying bets that have been graded
+      filteredResult = result.filter(g => g.qualifies_for_bet && g.bet_result !== null);
     }
 
     // Get season stats
