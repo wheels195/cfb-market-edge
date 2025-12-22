@@ -141,8 +141,11 @@ export async function GET(request: Request) {
     }
 
     const result: CbbGame[] = (games || []).map((game: any) => {
-      const prediction = game.cbb_game_predictions?.[0];
-      const bettingLine = game.cbb_betting_lines?.[0];
+      // Handle both array and object formats from Supabase join
+      const predRaw = game.cbb_game_predictions;
+      const prediction = Array.isArray(predRaw) ? predRaw[0] : predRaw;
+      const lineRaw = game.cbb_betting_lines;
+      const bettingLine = Array.isArray(lineRaw) ? lineRaw[0] : lineRaw;
 
       const homeEloData = eloMap.get(game.home_team_id) || { elo: 1500, games: 0 };
       const awayEloData = eloMap.get(game.away_team_id) || { elo: 1500, games: 0 };
