@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { materializeEdges } from '@/lib/jobs/materialize-edges';
+import { materializeEdgesT60 } from '@/lib/jobs/materialize-edges-t60';
 import { startJobRun, completeJobRun } from '@/lib/jobs/sync-events';
 
 export const dynamic = 'force-dynamic';
@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   const jobId = await startJobRun('materialize_edges');
 
   try {
-    const result = await materializeEdges();
+    const result = await materializeEdgesT60();
 
     if (jobId) {
       await completeJobRun(

@@ -1,3 +1,20 @@
+/**
+ * Materialize Edges - DEPRECATED
+ *
+ * ⚠️  THIS MODEL IS DEPRECATED - DO NOT USE FOR PRODUCTION
+ *
+ * The validated production model is materialize-edges-t60.ts which uses
+ * the T-60 ensemble (Elo 50% + SP+ 30% + PPA 20%).
+ *
+ * Backtest: 758 bets, 63.2% win, +20.6% ROI (2022-2024)
+ *
+ * This file is kept for reference only. The guard below prevents
+ * accidental writes to the edges table.
+ */
+
+// GUARD: Prevent this deprecated model from writing to edges table
+const DEPRECATED_MODEL_GUARD = true;
+
 import { supabase } from '@/lib/db/client';
 import { MarketType, Projection } from '@/types/database';
 import { getCFBDApiClient } from '@/lib/api/cfbd-api';
@@ -262,6 +279,14 @@ export async function materializeEdges(): Promise<MaterializeEdgesResult> {
     oddsCoverage: null,
     errors: [],
   };
+
+  // GUARD: This model is deprecated - use materializeEdgesT60 instead
+  if (DEPRECATED_MODEL_GUARD) {
+    console.error('[Materialize] ⚠️  BLOCKED: This model is deprecated.');
+    console.error('[Materialize] Use materializeEdgesT60 from materialize-edges-t60.ts instead.');
+    result.errors.push('DEPRECATED: materializeEdges is disabled. Use materializeEdgesT60.');
+    return result;
+  }
 
   try {
     // Get upcoming events within lookahead window

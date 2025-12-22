@@ -5,13 +5,13 @@
  * 1. Sync upcoming events
  * 2. Poll odds for upcoming events
  * 3. Sync Elo ratings from CFBD
- * 4. Generate dual projections (MARKET_ANCHORED + ELO_RAW)
- * 5. Materialize edges (READ from projections, don't generate)
+ * 4. Generate projections (optional)
+ * 5. Materialize edges using T-60 validated model
  *
- * Architecture: PROJECTIONS ARE THE SINGLE SOURCE OF TRUTH
- * - runModel generates both SPREADS_MARKET_ANCHORED_V1 and SPREADS_ELO_RAW_V1
- * - materializeEdgesV2 reads projections by model_version_id
- * - Edge computation happens ONLY in materialize-edges-v2
+ * Architecture: T-60 ENSEMBLE IS THE PRODUCTION MODEL
+ * - materializeEdgesT60 computes edges using validated T-60 ensemble
+ * - Elo (50%) + SP+ (30%) + PPA (20%)
+ * - Backtest: 758 bets, 63.2% win, +20.6% ROI (2022-2024)
  *
  * Includes:
  * - Coverage gate (fail if projections < 95%)
@@ -24,7 +24,7 @@ import { syncEvents, SyncEventsResult } from './sync-events';
 import { pollOdds, PollOddsResult } from './poll-odds';
 import { syncElo, SyncEloResult } from './sync-elo';
 import { runModel, RunModelResult } from './run-model';
-import { materializeEdgesV2, MaterializeEdgesV2Result } from './materialize-edges-v2';
+import { materializeEdgesT60, MaterializeEdgesResult } from './materialize-edges-t60';
 
 const CONFIG = {
   COVERAGE_THRESHOLD: 0.95,  // 95% of events must have projections
@@ -38,7 +38,7 @@ export interface PipelineResult {
     pollOdds?: PollOddsResult;
     syncElo?: SyncEloResult;
     runModel?: RunModelResult;
-    materializeEdges?: MaterializeEdgesV2Result;
+    materializeEdges?: MaterializeEdgesResult;
   };
   coverage: {
     totalEvents: number;
@@ -240,13 +240,13 @@ export async function runPipeline(options?: {
       return result;
     }
 
-    // Step 5: Materialize edges
-    console.log('[Pipeline] Step 5: Materializing edges...');
+    // Step 5: Materialize edges (T-60 validated model)
+    console.log('[Pipeline] Step 5: Materializing edges (T-60 model)...');
     const edgesStart = Date.now();
     try {
       result.steps.materializeEdges = await runWithTimeout(
         'materializeEdges',
-        materializeEdgesV2,
+        materializeEdgesT60,
         CONFIG.STEP_TIMEOUT_MS * 2  // Edges get extra time
       );
       result.timing.materializeEdgesMs = Date.now() - edgesStart;

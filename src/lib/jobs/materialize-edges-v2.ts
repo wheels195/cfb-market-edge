@@ -1,17 +1,19 @@
 /**
- * Materialize Edges v2 - Clean Architecture
+ * Materialize Edges v2 - DEPRECATED
  *
- * This version follows the principle: PROJECTIONS ARE THE SINGLE SOURCE OF TRUTH
+ * ⚠️  THIS MODEL IS DEPRECATED - DO NOT USE FOR PRODUCTION
  *
- * Edge computation:
- * 1. Read market line from odds_ticks
- * 2. Read projection from projections table (SPREADS_MARKET_ANCHORED_V1)
- * 3. Compute edge = market_spread - model_spread
- * 4. Read SPREADS_ELO_RAW_V1 for disagreement warning
- * 5. Store edge with elo_disagreement_points
+ * The validated production model is materialize-edges-t60.ts which uses
+ * the T-60 ensemble (Elo 50% + SP+ 30% + PPA 20%).
  *
- * NO model logic in this file. All projections come from the projections table.
+ * Backtest: 758 bets, 63.2% win, +20.6% ROI (2022-2024)
+ *
+ * This file is kept for reference only. The guard below prevents
+ * accidental writes to the edges table.
  */
+
+// GUARD: Prevent this deprecated model from writing to edges table
+const DEPRECATED_MODEL_GUARD = true;
 
 import { supabase } from '@/lib/db/client';
 import { MODEL_VERSIONS, getBothProjections } from '@/lib/models/dual-projections';
@@ -118,6 +120,14 @@ export async function materializeEdgesV2(): Promise<MaterializeEdgesV2Result> {
     eventsSkipped: 0,
     errors: [],
   };
+
+  // GUARD: This model is deprecated - use materializeEdgesT60 instead
+  if (DEPRECATED_MODEL_GUARD) {
+    console.error('[MaterializeV2] ⚠️  BLOCKED: This model is deprecated.');
+    console.error('[MaterializeV2] Use materializeEdgesT60 from materialize-edges-t60.ts instead.');
+    result.errors.push('DEPRECATED: materializeEdgesV2 is disabled. Use materializeEdgesT60.');
+    return result;
+  }
 
   try {
     const now = new Date();
