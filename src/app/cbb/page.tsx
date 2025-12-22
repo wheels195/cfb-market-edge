@@ -36,6 +36,8 @@ interface CbbGame {
 interface ApiResponse {
   games: CbbGame[];
   season: number;
+  isHistoricalData?: boolean;
+  message?: string | null;
   stats: {
     total_bets: number;
     wins: number;
@@ -259,6 +261,7 @@ export default function CbbPage() {
   const [stats, setStats] = useState<ApiResponse['stats'] | null>(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'upcoming' | 'completed' | 'bets'>('upcoming');
+  const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -267,6 +270,7 @@ export default function CbbPage() {
       .then((data: ApiResponse) => {
         setGames(data.games || []);
         setStats(data.stats);
+        setMessage(data.message || null);
         setLoading(false);
       })
       .catch(err => {
@@ -285,6 +289,18 @@ export default function CbbPage() {
             Elo model • Bet underdogs with 10+ pt spreads and 2.5-5 pt edge
           </p>
         </div>
+
+        {/* Historical Data Warning */}
+        {message && (
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 mb-6">
+            <div className="flex items-center gap-2 text-amber-400">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <span className="font-medium">{message}</span>
+            </div>
+          </div>
+        )}
 
         {/* Stats Card */}
         {stats && stats.total_bets > 0 && (
