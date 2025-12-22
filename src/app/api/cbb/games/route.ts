@@ -68,6 +68,7 @@ export async function GET(request: Request) {
     }
 
     // Build query based on filter (D1 only - both team IDs must exist)
+    // Join betting lines to get market spread
     let query = supabase
       .from('cbb_games')
       .select(`
@@ -79,6 +80,11 @@ export async function GET(request: Request) {
         away_team_name,
         home_score,
         away_score,
+        cbb_betting_lines (
+          spread_home,
+          total,
+          provider
+        ),
         cbb_game_predictions (
           model_spread_home,
           market_spread_home,
@@ -128,25 +134,25 @@ export async function GET(request: Request) {
 
     const result: CbbGame[] = (games || []).map((game: any) => {
       const prediction = game.cbb_game_predictions?.[0];
+      const bettingLine = game.cbb_betting_lines?.[0];
 
       const homeEloData = eloMap.get(game.home_team_id) || { elo: 1500, games: 0 };
       const awayEloData = eloMap.get(game.away_team_id) || { elo: 1500, games: 0 };
 
-      // Determine status
+      // Determine status - CBBD uses 0-0 for upcoming, not null
       let status: 'upcoming' | 'in_progress' | 'completed' = 'upcoming';
-      if (game.home_score !== null) {
+      const isCompleted = game.home_score !== 0 || game.away_score !== 0;
+      if (isCompleted) {
         status = 'completed';
       } else if (new Date(game.start_date) <= now) {
         status = 'in_progress';
       }
 
-      // Calculate model spread if no prediction exists
-      let modelSpread = prediction?.model_spread_home;
-      if (modelSpread === undefined || modelSpread === null) {
-        modelSpread = elo.getSpread(game.home_team_id, game.away_team_id);
-      }
+      // Calculate model spread from Elo
+      const modelSpread = elo.getSpread(game.home_team_id, game.away_team_id);
 
-      const marketSpread = prediction?.market_spread_home ?? null;
+      // Get market spread from betting lines or predictions
+      const marketSpread = bettingLine?.spread_home ?? prediction?.market_spread_home ?? null;
 
       // Analyze bet if we have market spread
       let analysis = {
