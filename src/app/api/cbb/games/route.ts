@@ -34,38 +34,17 @@ interface CbbGame {
 }
 
 /**
- * Get the current CBB season
- * Falls back to most recent season with data if current season is empty
+ * Get the current CBB season (2025-26 = 2026)
  */
-async function getCurrentSeason(): Promise<number> {
+function getCurrentSeason(): number {
   const now = new Date();
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
 
-  // Calculate expected current season
-  let season: number;
-  if (month >= 11) season = year + 1;
-  else if (month <= 4) season = year;
-  else season = year + 1;
-
-  // Check if we have games for this season
-  const { count } = await supabase
-    .from('cbb_games')
-    .select('*', { count: 'exact', head: true })
-    .eq('season', season);
-
-  if (count && count > 0) {
-    return season;
-  }
-
-  // Fall back to most recent season with data
-  const { data } = await supabase
-    .from('cbb_games')
-    .select('season')
-    .order('season', { ascending: false })
-    .limit(1);
-
-  return data?.[0]?.season || season;
+  // CBB season labels: Nov 2025 - Apr 2026 = "2026" season
+  if (month >= 11) return year + 1;
+  if (month <= 4) return year;
+  return year + 1; // Off-season defaults to upcoming season
 }
 
 export async function GET(request: Request) {
@@ -74,7 +53,7 @@ export async function GET(request: Request) {
     const filter = searchParams.get('filter') || 'upcoming';
     const limit = parseInt(searchParams.get('limit') || '50', 10);
 
-    const season = await getCurrentSeason();
+    const season = getCurrentSeason();
     const now = new Date();
 
     // Load Elo ratings
@@ -115,31 +94,17 @@ export async function GET(request: Request) {
       .not('home_team_id', 'is', null) // D1 filter
       .not('away_team_id', 'is', null); // D1 filter
 
-    // Calculate expected current season to check if we're using historical data
-    const expectedSeason = (() => {
-      const month = now.getMonth() + 1;
-      const year = now.getFullYear();
-      if (month >= 11) return year + 1;
-      if (month <= 4) return year;
-      return year + 1;
-    })();
-    const isHistoricalData = season < expectedSeason;
-
     if (filter === 'upcoming') {
-      if (isHistoricalData) {
-        // No upcoming games in historical season - show recent completed instead
-        query = query
-          .not('home_score', 'is', null)
-          .order('start_date', { ascending: false });
-      } else {
-        query = query
-          .is('home_score', null)
-          .gte('start_date', now.toISOString())
-          .order('start_date', { ascending: true });
-      }
-    } else if (filter === 'completed') {
+      // CBBD returns 0-0 for upcoming games, not null
       query = query
-        .not('home_score', 'is', null)
+        .eq('home_score', 0)
+        .eq('away_score', 0)
+        .gte('start_date', now.toISOString())
+        .order('start_date', { ascending: true });
+    } else if (filter === 'completed') {
+      // Completed games have actual scores (not 0-0)
+      query = query
+        .or('home_score.neq.0,away_score.neq.0')
         .order('start_date', { ascending: false });
     } else if (filter === 'bets') {
       // Games with qualifying bets
@@ -254,8 +219,6 @@ export async function GET(request: Request) {
     return NextResponse.json({
       games: filteredResult,
       season,
-      isHistoricalData,
-      message: isHistoricalData ? `Showing ${season-1}-${String(season).slice(2)} season data. Current season not yet synced.` : null,
       stats: {
         total_bets: totalBets,
         wins,
