@@ -90,9 +90,11 @@ function getShortName(fullName: string): string {
 }
 
 function formatSpread(spread: number): string {
-  if (spread > 0) return `+${spread}`;
-  if (spread === 0) return 'PK';
-  return `${spread}`;
+  // Round to nearest 0.5 for cleaner display
+  const rounded = Math.round(spread * 2) / 2;
+  if (rounded > 0) return `+${rounded}`;
+  if (rounded === 0) return 'PK';
+  return `${rounded}`;
 }
 
 function formatOdds(price: number | null): string {

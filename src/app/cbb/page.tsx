@@ -58,13 +58,31 @@ function formatGameTime(dateStr: string): string {
   const now = new Date();
   const diff = date.getTime() - now.getTime();
 
-  if (diff < 0) return 'Live';
-  if (diff < 3600000) return `${Math.round(diff / 60000)}m`;
-  if (diff < 86400000) return `${Math.round(diff / 3600000)}h`;
+  if (diff < 0 && diff > -10800000) return 'Live'; // Within 3 hours of start
 
+  // Show full date and time
   return date.toLocaleDateString('en-US', {
     weekday: 'short',
     month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function formatDateHeader(dateStr: string): string {
+  const date = new Date(dateStr);
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const dateOnly = date.toDateString();
+  if (dateOnly === today.toDateString()) return 'Today';
+  if (dateOnly === tomorrow.toDateString()) return 'Tomorrow';
+
+  return date.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
     day: 'numeric',
   });
 }
@@ -339,14 +357,29 @@ export default function CbbPage() {
               <span className="text-xs text-zinc-500">{games.length} games</span>
             </div>
 
-            <div className="space-y-3">
-              {games.map((game) => {
-                const hasEdge = game.edge_points !== null && game.edge_points >= 2.5;
-                const strongEdge = game.edge_points !== null && game.edge_points >= 2.5 && game.qualifies_for_bet;
+            <div className="space-y-6">
+              {/* Group games by date */}
+              {(() => {
+                const gamesByDate: Record<string, CbbGame[]> = {};
+                for (const game of games) {
+                  const dateKey = new Date(game.start_date).toDateString();
+                  if (!gamesByDate[dateKey]) gamesByDate[dateKey] = [];
+                  gamesByDate[dateKey].push(game);
+                }
+                return Object.entries(gamesByDate).map(([dateKey, dateGames]) => (
+                  <div key={dateKey}>
+                    {/* Date Header */}
+                    <div className="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-3 border-b border-zinc-800 pb-2">
+                      {formatDateHeader(dateGames[0].start_date)}
+                    </div>
+                    <div className="space-y-3">
+                      {dateGames.map((game) => {
+                        const hasEdge = game.edge_points !== null && game.edge_points >= 2.5;
+                        const strongEdge = game.edge_points !== null && game.edge_points >= 2.5 && game.qualifies_for_bet;
 
-                return (
-                  <div
-                    key={game.id}
+                        return (
+                          <div
+                            key={game.id}
                     className={`rounded-xl p-4 transition-all ${
                       game.bet_result === 'win'
                         ? 'bg-emerald-500/5 border-2 border-emerald-500/30'
@@ -482,7 +515,11 @@ export default function CbbPage() {
                     )}
                   </div>
                 );
-              })}
+                      })}
+                    </div>
+                  </div>
+                ));
+              })()}
             </div>
           </section>
         )}
