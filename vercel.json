@@ -7,6 +7,10 @@
     { "path": "/api/cron/sync-results", "schedule": "0 6 * * *" },
     { "path": "/api/cron/grade-bets", "schedule": "0 7 * * *" },
     { "path": "/api/cron/sync-elo", "schedule": "30 6 * * *" },
-    { "path": "/api/cron/cleanup", "schedule": "0 3 * * *" }
+    { "path": "/api/cron/cleanup", "schedule": "0 3 * * *" },
+    { "path": "/api/cron/cbb-sync-odds", "schedule": "*/15 * * * *" },
+    { "path": "/api/cron/cbb-update-elo", "schedule": "30 6 * * *" },
+    { "path": "/api/cron/cbb-materialize-edges", "schedule": "*/15 * * * *" },
+    { "path": "/api/cron/cbb-grade-bets", "schedule": "0 7 * * *" }
   ]
 }

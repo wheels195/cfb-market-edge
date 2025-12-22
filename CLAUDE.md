@@ -310,7 +310,7 @@ curl http://localhost:3000/api/backtest/calibration?seasons=2022,2023,2024
 
 ### Status: ARCHIVED — No Actionable Edge Found
 
-CBB (college basketball) was explored as a potential second market. After comprehensive research, both spreads and totals markets showed high efficiency with no exploitable edge.
+CBB (college basketball) was explored as a potential second market. After comprehensive research across THREE approaches, all showed high market efficiency with no exploitable edge.
 
 ### Track A: CBB Spreads + Line Movement
 
@@ -331,7 +331,7 @@ CBB (college basketball) was explored as a potential second market. After compre
 | WITH move | 1+ pts | 51.8% | -1.1% |
 | AGAINST move | 3+ pts | 52.4% | +0.0% |
 
-**Conclusion:** No reliable edge. Large season variance (2023 favored WITH, 2024 favored AGAINST at 3+), no monotonic relationship with move magnitude. Market is efficient.
+**Conclusion:** No reliable edge. Market is efficient.
 
 ### Track B: CBB Totals + Structural Signals
 
@@ -351,21 +351,70 @@ CBB (college basketball) was explored as a potential second market. After compre
 | Back-to-back | 1,655 | 52.7% | Over | +0.6% |
 | 2-3 days rest | 4,115 | 48.4% | Under | -1.5% |
 
-**Conclusion:** Market efficient. Only 8+ day rest shows marginal edge (+2.7%) but sample too small (646 games) and signal too weak to be actionable.
+**Conclusion:** Market efficient. Structural signals too weak.
 
-### Why CBB Was Archived
+### Track C: CBB Ratings Model (December 2025)
 
-1. **Spreads:** Line movement contains no signal — neither following nor fading sharps works
-2. **Totals:** Structural signals too weak to overcome vig
-3. **Opportunity cost:** CFB model shows stronger backtest results (2.5-5 pt edge with +6-13% ROI) and needs T-60 validation before capital deployment
+**Dataset:** 4,467 games with T-60 spreads AND prior-season net ratings (2023-2024)
+
+**Research Question:** Can net rating differential predict spreads better than market? (Same approach that works for CFB)
+
+**Scripts:**
+- `scripts/cbb-ratings-backtest-v2.ts` - Full ratings model backtest
+- `docs/CBB_RATINGS_MODEL_SCOPE.md` - Methodology documentation
+
+**Model:**
+```
+Model Spread = (Away Net Rating - Home Net Rating) / K + HFA
+Edge = Market T-60 Spread - Model Spread
+```
+
+**Grid Search:** Tested K ∈ [2.0, 5.0], HFA ∈ [2.5, 4.0], Edge filters [0-100]
+
+**Results:**
+
+| Dataset | Bets | Win% | ROI |
+|---------|------|------|-----|
+| Train (2023) | 2,152 | 49.4% | -5.6% |
+| Holdout (2024) | 2,228 | 48.5% | -7.3% |
+| **Combined** | **4,380** | **49.0%** | **-6.5%** |
+
+**Edge Filter Analysis (2024 Holdout):**
+
+| Edge Range | Bets | Win% | ROI |
+|------------|------|------|-----|
+| 2-3 pts | 80 | 45.0% | -14.0% |
+| 3-4 pts | 108 | 50.0% | -4.5% |
+| 4-5 pts | 152 | 46.7% | -10.8% |
+| 5-7 pts | 304 | 50.3% | -3.9% |
+
+**Conclusion:** No edge range is profitable. Net ratings provide ZERO predictive value over market prices.
+
+### CFB vs CBB Comparison
+
+| Market | Approach | Bets | Win% | ROI |
+|--------|----------|------|------|-----|
+| **CFB** | T-60 Ensemble (Elo+SP++PPA) | 758 | 63.2% | **+20.6%** |
+| **CBB** | Net Rating Model | 4,380 | 49.0% | **-6.5%** |
+| **CBB** | Line Movement | 5,914 | ~51% | **-1 to -8%** |
+| **CBB** | Structural Signals | 18,689 | ~50% | **-4.5%** |
+
+### Why CBB Is Definitively Archived
+
+1. **Spreads (Ratings):** Net rating model = 49% win rate, -6.5% ROI on 4,380 bets
+2. **Spreads (Line Movement):** No signal in following or fading market moves
+3. **Totals:** Structural signals too weak to overcome vig
+4. **All approaches tested:** Ratings, line movement, structural — all fail
+5. **Large sample sizes:** 4,000-18,000 games per approach
+6. **CBB market is efficient:** Higher volume than CFB, ratings already priced in
 
 ### CBB Tables (for reference)
 
 ```
-cbb_games           - Games with scores, team IDs
-cbb_teams           - Team lookup with aliases
-cbb_betting_lines   - Spreads/totals at various timestamps
-cbb_sync_progress   - Sync tracking for resumability
+cbb_games           - Games with scores, team IDs (12,000 rows)
+cbb_teams           - Team lookup with aliases (365 rows)
+cbb_betting_lines   - Spreads at open/T-60/close (24,275 rows)
+cbb_team_ratings    - Net/off/def ratings by season (1,443 rows)
 ```
 
 ---

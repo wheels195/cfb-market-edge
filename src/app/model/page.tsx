@@ -430,12 +430,229 @@ export default function ModelPage() {
           </div>
         </section>
 
+        {/* CBB Section Divider */}
+        <div className="relative my-16">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-zinc-700"></div>
+          </div>
+          <div className="relative flex justify-center">
+            <span className="bg-[#050505] px-4 text-lg font-bold text-orange-400">College Basketball</span>
+          </div>
+        </div>
+
+        {/* CBB Hero */}
+        <section className="mb-12">
+          <div className="inline-flex items-center gap-2 px-3 py-1 bg-orange-500/10 border border-orange-500/20 rounded-full mb-6">
+            <div className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-pulse" />
+            <span className="text-xs font-medium text-orange-400 uppercase tracking-wider">CBB Elo Model</span>
+          </div>
+          <h2 className="text-3xl font-bold text-white tracking-tight mb-4">
+            Underdog Elo Strategy
+          </h2>
+          <p className="text-lg text-zinc-400 max-w-2xl">
+            Pure Elo-based model for college basketball spreads. Targets underdogs with large spreads where the model shows moderate edge.
+          </p>
+        </section>
+
+        {/* CBB Backtest Results */}
+        <section className="mb-12">
+          <h2 className="text-xl font-bold text-white mb-4 pb-2 border-b border-zinc-800">CBB Backtest Results (2022-2024)</h2>
+
+          <div className="bg-gradient-to-br from-orange-950/30 to-zinc-900/50 border border-orange-500/20 rounded-xl p-6 mb-6">
+            <div className="grid grid-cols-3 gap-6 text-center mb-6">
+              <div>
+                <div className="text-3xl font-bold text-white">138</div>
+                <div className="text-sm text-zinc-400">Total Bets</div>
+              </div>
+              <div>
+                <div className="text-3xl font-bold text-orange-400">59.4%</div>
+                <div className="text-sm text-zinc-400">Win Rate</div>
+              </div>
+              <div>
+                <div className="text-3xl font-bold text-orange-400">+13.5%</div>
+                <div className="text-sm text-zinc-400">ROI</div>
+              </div>
+            </div>
+            <div className="text-xs text-zinc-500 text-center">
+              Underdogs only • 10+ point spreads • 2.5-5 point edge filter
+            </div>
+          </div>
+
+          <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mt-6">
+            <div className="flex items-start gap-3">
+              <svg className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div className="text-sm text-zinc-300">
+                <strong className="text-blue-400">Chronological Holdout:</strong> Train set (2022-2023): +8.8% ROI → Test set (2024): +19.8% ROI. Holdout confirms model generalizes to unseen data.
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* CBB Strategy */}
+        <section className="mb-12">
+          <h2 className="text-xl font-bold text-white mb-4 pb-2 border-b border-zinc-800">CBB Bet Qualification Criteria</h2>
+
+          <p className="text-zinc-400 mb-4">
+            Unlike CFB which bets both sides, CBB focuses exclusively on <strong className="text-white">underdogs</strong> with specific filters:
+          </p>
+
+          <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4 mb-6">
+            <div className="space-y-3 font-mono text-sm">
+              <div className="flex items-center gap-3">
+                <div className="w-6 h-6 bg-orange-500/20 rounded flex items-center justify-center text-orange-400 text-xs">1</div>
+                <span className="text-zinc-400">Spread Size:</span>
+                <span className="text-white">≥ 10 points (big underdogs only)</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-6 h-6 bg-orange-500/20 rounded flex items-center justify-center text-orange-400 text-xs">2</div>
+                <span className="text-zinc-400">Model Edge:</span>
+                <span className="text-white">2.5 - 5.0 points</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-6 h-6 bg-orange-500/20 rounded flex items-center justify-center text-orange-400 text-xs">3</div>
+                <span className="text-zinc-400">Games Played:</span>
+                <span className="text-white">Both teams must have 5+ games</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-6 h-6 bg-orange-500/20 rounded flex items-center justify-center text-orange-400 text-xs">4</div>
+                <span className="text-zinc-400">Side:</span>
+                <span className="text-white">Underdog only (never favorite)</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <svg className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div className="text-sm text-zinc-300">
+                <strong className="text-amber-400">Why Underdogs Only?</strong> CBB markets show inefficiency specifically in large underdog lines. The model identifies when big underdogs are undervalued by 2.5-5 points. Betting favorites showed no edge in backtesting.
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* CBB Elo Model */}
+        <section className="mb-12">
+          <h2 className="text-xl font-bold text-white mb-4 pb-2 border-b border-zinc-800">CBB Elo Rating System</h2>
+
+          <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4 font-mono text-sm mb-6">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <span className="text-zinc-500">BASE_ELO</span>
+                <span className="text-white ml-4">= 1500</span>
+              </div>
+              <div>
+                <span className="text-zinc-500">K_FACTOR</span>
+                <span className="text-white ml-4">= 20</span>
+              </div>
+              <div>
+                <span className="text-zinc-500">HOME_ADVANTAGE</span>
+                <span className="text-white ml-4">= 2.5 pts</span>
+              </div>
+              <div>
+                <span className="text-zinc-500">ELO_DIVISOR</span>
+                <span className="text-white ml-4">= 25</span>
+              </div>
+              <div>
+                <span className="text-zinc-500">SEASON_CARRYOVER</span>
+                <span className="text-white ml-4">= 60%</span>
+              </div>
+              <div>
+                <span className="text-zinc-500">D1 TEAMS</span>
+                <span className="text-white ml-4">= 364</span>
+              </div>
+            </div>
+          </div>
+
+          <h3 className="text-lg font-semibold text-white mt-6 mb-3">Spread Projection</h3>
+          <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-6 mb-6">
+            <div className="text-center font-mono">
+              <div className="text-lg text-white mb-2">
+                Spread<sub>model</sub> = (Elo<sub>home</sub> - Elo<sub>away</sub>) / 25 + 2.5
+              </div>
+              <div className="text-sm text-zinc-500 mt-4">
+                Pure Elo model (no SP+ or PPA components for CBB)
+              </div>
+            </div>
+          </div>
+
+          <h3 className="text-lg font-semibold text-white mt-6 mb-3">Edge Calculation</h3>
+          <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-6 mb-6">
+            <div className="text-center font-mono">
+              <div className="text-lg text-white mb-2">
+                Edge = Model Spread - Market Spread
+              </div>
+              <div className="text-sm text-zinc-500 mt-4">
+                Positive edge on underdog = model thinks underdog is better than market says
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* CBB vs CFB Comparison */}
+        <section className="mb-12">
+          <h2 className="text-xl font-bold text-white mb-4 pb-2 border-b border-zinc-800">CFB vs CBB Model Comparison</h2>
+
+          <div className="overflow-hidden rounded-lg border border-zinc-800">
+            <table className="w-full text-sm">
+              <thead className="bg-zinc-800/50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-zinc-400 font-medium">Aspect</th>
+                  <th className="px-4 py-3 text-center text-emerald-400 font-medium">CFB</th>
+                  <th className="px-4 py-3 text-center text-orange-400 font-medium">CBB</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-800">
+                <tr className="bg-zinc-900/30">
+                  <td className="px-4 py-3 text-zinc-300">Model Type</td>
+                  <td className="px-4 py-3 text-center text-white">T-60 Ensemble (Elo+SP++PPA)</td>
+                  <td className="px-4 py-3 text-center text-white">Pure Elo</td>
+                </tr>
+                <tr className="bg-zinc-900/30">
+                  <td className="px-4 py-3 text-zinc-300">Bet Sides</td>
+                  <td className="px-4 py-3 text-center text-white">Both (favorites + underdogs)</td>
+                  <td className="px-4 py-3 text-center text-white">Underdogs only</td>
+                </tr>
+                <tr className="bg-zinc-900/30">
+                  <td className="px-4 py-3 text-zinc-300">Spread Filter</td>
+                  <td className="px-4 py-3 text-center text-white">None</td>
+                  <td className="px-4 py-3 text-center text-white">≥ 10 points</td>
+                </tr>
+                <tr className="bg-zinc-900/30">
+                  <td className="px-4 py-3 text-zinc-300">Edge Filter</td>
+                  <td className="px-4 py-3 text-center text-white">2.5-5 pts</td>
+                  <td className="px-4 py-3 text-center text-white">2.5-5 pts</td>
+                </tr>
+                <tr className="bg-zinc-900/30">
+                  <td className="px-4 py-3 text-zinc-300">Win Rate</td>
+                  <td className="px-4 py-3 text-center text-emerald-400">63.2%</td>
+                  <td className="px-4 py-3 text-center text-orange-400">59.4%</td>
+                </tr>
+                <tr className="bg-zinc-900/30">
+                  <td className="px-4 py-3 text-zinc-300">ROI</td>
+                  <td className="px-4 py-3 text-center text-emerald-400">+20.6%</td>
+                  <td className="px-4 py-3 text-center text-orange-400">+13.5%</td>
+                </tr>
+                <tr className="bg-zinc-900/30">
+                  <td className="px-4 py-3 text-zinc-300">Bets/Season</td>
+                  <td className="px-4 py-3 text-center text-white">~250</td>
+                  <td className="px-4 py-3 text-center text-white">~45</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
         {/* Disclaimer */}
         <section className="border-t border-zinc-800/50 pt-8">
           <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-5">
             <div className="text-xs uppercase tracking-wider text-zinc-500 mb-2">Disclaimer</div>
             <p className="text-sm text-zinc-400">
-              This model is provided for informational and research purposes. Past performance does not guarantee future results. Sports betting involves significant risk of loss. The backtest results shown use historical data with T-60 execution timing and -110 juice assumptions. Actual results may vary.
+              These models are provided for informational and research purposes. Past performance does not guarantee future results. Sports betting involves significant risk of loss. The backtest results shown use historical data with T-60 execution timing and -110 juice assumptions. Actual results may vary.
             </p>
           </div>
         </section>
@@ -450,7 +667,7 @@ export default function ModelPage() {
               <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
               <span>CFB Edge</span>
             </div>
-            <div>Model: T-60 Ensemble v1.0 • Deployed December 2025</div>
+            <div>CFB: T-60 Ensemble v1.0 • CBB: Elo Underdog v1.0 • December 2025</div>
           </div>
         </div>
       </footer>
