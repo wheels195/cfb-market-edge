@@ -72,6 +72,7 @@ async function getUpcomingGamesWithOdds(): Promise<Array<{
   const future = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days ahead
 
   // Get games with recent odds (D1 only - both team IDs must exist)
+  // CBBD uses 0 for upcoming games, not null
   const { data: games, error } = await supabase
     .from('cbb_games')
     .select(`
@@ -80,11 +81,16 @@ async function getUpcomingGamesWithOdds(): Promise<Array<{
       away_team_id,
       home_team_name,
       away_team_name,
-      start_date
+      start_date,
+      cbb_betting_lines (
+        spread_home,
+        provider
+      )
     `)
     .gte('start_date', now.toISOString())
     .lte('start_date', future.toISOString())
-    .is('home_score', null) // Only upcoming games
+    .eq('home_score', 0) // CBBD uses 0 for upcoming, not null
+    .eq('away_score', 0)
     .not('home_team_id', 'is', null) // D1 filter: home team must be matched
     .not('away_team_id', 'is', null); // D1 filter: away team must be matched
 
@@ -93,7 +99,7 @@ async function getUpcomingGamesWithOdds(): Promise<Array<{
     return [];
   }
 
-  // Get latest odds for these games
+  // Filter games that have betting lines
   const results: Array<{
     game_id: string;
     home_team_id: string;
@@ -105,15 +111,10 @@ async function getUpcomingGamesWithOdds(): Promise<Array<{
   }> = [];
 
   for (const game of games || []) {
-    // Get latest odds tick
-    const { data: odds } = await supabase
-      .from('cbb_odds_ticks')
-      .select('spread_home')
-      .or(`home_team.ilike.%${game.home_team_name}%,away_team.ilike.%${game.away_team_name}%`)
-      .order('captured_at', { ascending: false })
-      .limit(1);
+    const bettingLines = (game as any).cbb_betting_lines as Array<{ spread_home: number; provider: string }> | null;
+    const line = bettingLines?.[0];
 
-    if (odds?.[0]?.spread_home !== null && odds?.[0]?.spread_home !== undefined) {
+    if (line?.spread_home !== null && line?.spread_home !== undefined) {
       results.push({
         game_id: game.id,
         home_team_id: game.home_team_id,
@@ -121,7 +122,7 @@ async function getUpcomingGamesWithOdds(): Promise<Array<{
         home_team_name: game.home_team_name,
         away_team_name: game.away_team_name,
         start_date: game.start_date,
-        spread_home: odds[0].spread_home,
+        spread_home: line.spread_home,
       });
     }
   }

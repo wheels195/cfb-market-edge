@@ -28,7 +28,8 @@ export async function gradeCbbBets(): Promise<CbbGradeBetsResult> {
   };
 
   try {
-    // Get predictions that need grading (have result, no bet_result yet)
+    // Get predictions that need grading (game completed, no bet_result yet)
+    // CBBD uses 0 for upcoming games, so completed games have non-zero scores
     const { data: ungraded, error: fetchError } = await supabase
       .from('cbb_game_predictions')
       .select(`
@@ -43,7 +44,7 @@ export async function gradeCbbBets(): Promise<CbbGradeBetsResult> {
         )
       `)
       .is('bet_result', null)
-      .not('cbb_games.home_score', 'is', null);
+      .or('cbb_games.home_score.neq.0,cbb_games.away_score.neq.0');
 
     if (fetchError) {
       result.errors.push(`Fetch error: ${fetchError.message}`);
