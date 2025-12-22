@@ -100,8 +100,9 @@ export async function GET(request: Request) {
       .not('home_team_id', 'is', null) // D1 filter
       .not('away_team_id', 'is', null); // D1 filter
 
-    if (filter === 'upcoming') {
+    if (filter === 'upcoming' || filter === 'bets') {
       // CBBD returns 0-0 for upcoming games, not null
+      // For 'bets' filter, we look at upcoming games and filter for qualifiers
       query = query
         .eq('home_score', 0)
         .eq('away_score', 0)
@@ -111,10 +112,6 @@ export async function GET(request: Request) {
       // Completed games have actual scores (not 0-0)
       query = query
         .or('home_score.neq.0,away_score.neq.0')
-        .order('start_date', { ascending: false });
-    } else if (filter === 'bets') {
-      // Games with qualifying bets
-      query = query
         .order('start_date', { ascending: false });
     }
 
@@ -155,22 +152,36 @@ export async function GET(request: Request) {
       const marketSpread = bettingLine?.spread_home ?? prediction?.market_spread_home ?? null;
 
       // Analyze bet if we have market spread
-      let analysis = {
+      let analysis: {
+        qualifies: boolean;
+        isUnderdog: boolean;
+        absEdge: number;
+        spreadSize: number;
+        side: 'home' | 'away' | null;
+        qualificationReason: string | null;
+        reason: string | null;
+      } = {
         qualifies: false,
         isUnderdog: false,
         absEdge: 0,
         spreadSize: 0,
-        side: null as 'home' | 'away' | null,
-        qualificationReason: null as string | null,
+        side: null,
+        qualificationReason: null,
+        reason: null,
       };
 
       if (marketSpread !== null) {
-        analysis = analyzeCbbBet(
+        const betAnalysis = analyzeCbbBet(
           marketSpread,
           modelSpread,
           homeEloData.games,
           awayEloData.games
         );
+        analysis = {
+          ...betAnalysis,
+          qualificationReason: betAnalysis.qualificationReason,
+          reason: betAnalysis.reason,
+        };
       }
 
       return {
@@ -193,10 +204,10 @@ export async function GET(request: Request) {
         model_spread: modelSpread,
         edge_points: analysis.absEdge,
         spread_size: analysis.spreadSize,
-        recommended_side: analysis.qualifies ? analysis.side : (analysis.side || null),
+        recommended_side: analysis.side,
         is_underdog_bet: analysis.isUnderdog,
         qualifies_for_bet: prediction?.qualifies_for_bet || analysis.qualifies,
-        qualification_reason: prediction?.qualification_reason || analysis.qualificationReason,
+        qualification_reason: prediction?.qualification_reason || analysis.qualificationReason || analysis.reason,
         home_score: game.home_score,
         away_score: game.away_score,
         bet_result: prediction?.bet_result || null,

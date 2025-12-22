@@ -176,7 +176,7 @@ export interface CbbBetAnalysis {
   qualifies: boolean;
   edge: number;
   absEdge: number;
-  side: 'home' | 'away' | null;
+  side: 'home' | 'away'; // Always computed based on edge direction
   isUnderdog: boolean;
   spreadSize: number;
   homeGamesPlayed: number;
@@ -247,7 +247,7 @@ export function analyzeCbbBet(
     qualifies,
     edge,
     absEdge,
-    side: qualifies ? side : null,
+    side, // Always return computed side for display purposes
     isUnderdog,
     spreadSize,
     homeGamesPlayed,
