@@ -100,14 +100,21 @@ export async function GET(request: Request) {
       .not('home_team_id', 'is', null) // D1 filter
       .not('away_team_id', 'is', null); // D1 filter
 
-    if (filter === 'upcoming' || filter === 'bets') {
+    if (filter === 'upcoming') {
       // CBBD returns 0-0 for upcoming games, not null
-      // For 'bets' filter, we look at upcoming games and filter for qualifiers
       query = query
         .eq('home_score', 0)
         .eq('away_score', 0)
         .gte('start_date', now.toISOString())
         .order('start_date', { ascending: true });
+    } else if (filter === 'bets') {
+      // For bets, fetch more games since we filter after
+      query = query
+        .eq('home_score', 0)
+        .eq('away_score', 0)
+        .gte('start_date', now.toISOString())
+        .order('start_date', { ascending: true })
+        .limit(500); // Override limit to catch all qualifiers
     } else if (filter === 'completed') {
       // Completed games - only show games that have predictions stored
       // This ensures we only show results we can actually grade
@@ -117,7 +124,10 @@ export async function GET(request: Request) {
         .order('start_date', { ascending: false });
     }
 
-    query = query.limit(limit);
+    // Don't override limit for 'bets' filter (already set to 500)
+    if (filter !== 'bets') {
+      query = query.limit(limit);
+    }
 
     const { data: games, error } = await query;
 
