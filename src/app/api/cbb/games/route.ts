@@ -109,9 +109,11 @@ export async function GET(request: Request) {
         .gte('start_date', now.toISOString())
         .order('start_date', { ascending: true });
     } else if (filter === 'completed') {
-      // Completed games have actual scores (not 0-0)
+      // Completed games - only show games that have predictions stored
+      // This ensures we only show results we can actually grade
       query = query
         .or('home_score.neq.0,away_score.neq.0')
+        .not('cbb_game_predictions', 'is', null)
         .order('start_date', { ascending: false });
     }
 

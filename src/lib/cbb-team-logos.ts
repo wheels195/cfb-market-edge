@@ -451,6 +451,15 @@ const ESPN_CBB_TEAM_IDS: Record<string, number> = {
   'Winthrop': 2737,
   'Wofford': 2747,
   "Hawai'i": 62,
+
+  // Additional teams (avoiding duplicates)
+  'Lafayette': 322,
+  'Army West Point': 349,
+  'East Texas A&M': 2643,
+  'Texas A&M-Commerce': 2643,
+  'Queens': 3101,
+  'Seattle': 2547,
+  'Tarleton': 2626,
 };
 
 const DEFAULT_LOGO = 'https://a.espncdn.com/i/teamlogos/ncaa/500/default-team-logo-500.png';

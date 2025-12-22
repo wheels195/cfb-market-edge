@@ -99,6 +99,16 @@ function TeamLogo({ name, className = "w-full h-full" }: { name: string; classNa
   );
 }
 
+function formatGameTime(dateStr: string): string {
+  const date = new Date(dateStr);
+  // Format in CST (America/Chicago)
+  return date.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: 'America/Chicago',
+  }) + ' CST';
+}
+
 function getGameStatus(game: CbbGame): { label: string; color: string } {
   if (game.status === 'completed') {
     return { label: 'Final', color: 'text-zinc-500' };
@@ -111,18 +121,10 @@ function getGameStatus(game: CbbGame): { label: string; color: string } {
     return { label: 'Live', color: 'text-red-500' };
   }
 
-  const hoursUntil = (gameTime.getTime() - now.getTime()) / (1000 * 60 * 60);
-  if (hoursUntil < 1) {
-    const mins = Math.round(hoursUntil * 60);
-    return { label: `${mins}m`, color: 'text-amber-500' };
-  }
-  if (hoursUntil < 24) {
-    return { label: `${Math.round(hoursUntil)}h`, color: 'text-zinc-400' };
-  }
-
+  // Show actual time in CST
   return {
-    label: gameTime.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-    color: 'text-zinc-500'
+    label: formatGameTime(game.start_date),
+    color: 'text-zinc-400'
   };
 }
 
