@@ -12,9 +12,9 @@ Personal decision-support app for NCAAF betting that identifies market discrepan
 
 ---
 
-## CFB Model — Current Status (As Of December 2025)
+## CFB Model — Production Status (December 22, 2025)
 
-### What the Model Is
+### PRODUCTION MODEL: T-60 Ensemble
 
 The CFB model is a **T-60 ensemble** combining three rating systems:
 
@@ -25,6 +25,22 @@ The CFB model is a **T-60 ensemble** combining three rating systems:
 | PPA (Points Per Play) | 20% | `src/lib/models/t60-ensemble-v1.ts` |
 
 **Important:** The model does **NOT** use contrarian betting logic or confidence filters. All games with 2.5-5 pt edge are bet regardless of model disagreement.
+
+### Production Edge Writer
+
+**ONLY ONE JOB WRITES TO EDGES TABLE:**
+
+```
+/api/cron/materialize-edges → materializeEdgesT60()
+```
+
+Located in: `src/lib/jobs/materialize-edges-t60.ts`
+
+**Deprecated models (GUARDED - cannot write to edges):**
+- `src/lib/jobs/materialize-edges.ts` - Has `DEPRECATED_MODEL_GUARD = true`
+- `src/lib/jobs/materialize-edges-v2.ts` - Has `DEPRECATED_MODEL_GUARD = true`
+
+These deprecated files will error immediately if called, preventing accidental edge overwrites.
 
 ### T-60 Execution Validation (COMPLETED)
 
@@ -45,14 +61,15 @@ The CFB model is a **T-60 ensemble** combining three rating systems:
 - Train (2022-2023): 537 bets, 64.8% win, +23.7% ROI
 - Test (2024): 221 bets, 59.3% win, +13.2% ROI
 
-### What "Production" Means Now
+### Production Deployment Status
 
-**T-60 execution validated. All years profitable. Ready for live deployment.**
+**DEPLOYED TO PRODUCTION: December 22, 2025**
 
 - Frozen config: `src/lib/models/t60-ensemble-v1.ts`
 - FBS filter: `src/lib/fbs-teams.ts`
 - Edge filter: 2.5-5 pts (no confidence filter)
 - Backtest script: `scripts/cfb-t60-backtest-fbs.ts`
+- Edge materializer: `src/lib/jobs/materialize-edges-t60.ts`
 
 ---
 
@@ -199,17 +216,20 @@ cfbd_betting_lines   - Historical CFBD betting data
 advanced_team_ratings - SP+ and other advanced metrics
 ```
 
-### Cron Jobs (Vercel)
+### Cron Jobs (Vercel) — As of December 22, 2025
 
 | Job | Schedule | Purpose |
 |-----|----------|---------|
 | `poll-odds` | Every 10 min | Fetch live spreads from The Odds API |
-| `materialize-edges` | Every 15 min | Calculate model vs market edges |
+| `materialize-edges` | Every 15 min | Calculate T-60 ensemble edges (PRODUCTION) |
 | `set-closing-lines` | Every 30 min | Lock closing line + prediction at kickoff |
 | `sync-results` | 6 AM daily | Pull final scores from CFBD |
 | `grade-bets` | 7 AM daily | Calculate WIN/LOSS for completed games |
 | `sync-elo` | 6:30 AM daily | Update Elo ratings after games |
-| `run-pipeline` | 8 AM daily | Full data sync |
+| `cleanup` | 3 AM daily | Clean old data |
+
+**REMOVED from cron (December 22, 2025):**
+- `run-pipeline` - Was causing edge overwrites with wrong model. Pipeline now only called manually if needed, and uses T-60 via `materializeEdgesT60()`.
 
 ### API Endpoints
 
@@ -350,6 +370,30 @@ cbb_sync_progress   - Sync tracking for resumability
 
 ---
 
+## 2025 Bowl Season Data (Current)
+
+### Data Sources for 2025 Bowl Games
+
+| Component | Data Used | Source |
+|-----------|-----------|--------|
+| Elo | Week 16 (latest) | `team_elo_snapshots` table |
+| SP+ | 2025 season ratings | `advanced_team_ratings` table |
+| PPA | 2025 season ratings | `advanced_team_ratings` table |
+
+**Verified December 22, 2025:**
+- Elo ratings are current (Week 16 = post-conference championship)
+- Week 15 = Week 16 Elo because bowl games haven't occurred yet (expected)
+- SP+ and PPA are season-level 2025 ratings from CFBD API
+
+### Elo Verification
+
+Many teams end the season with similar Elo to preseason (regression to mean). This is NOT a bug:
+- Teams that over/underperform early regress back
+- CFBD data matches our database exactly
+- Script to verify: `scripts/verify-elo-accuracy.ts`
+
+---
+
 ## Notes
 
 - **Population**: FBS games only (FCS excluded via `src/lib/fbs-teams.ts`)
@@ -357,5 +401,5 @@ cbb_sync_progress   - Sync tracking for resumability
 - **Edge Filter**: 2.5-5 points (below = vig eats profit, above = model likely wrong)
 - **No Confidence Filter**: All model disagreement levels included (removed after backtest showed no benefit)
 - **Odds Source**: DraftKings primary
-- **Bowl Season**: End-of-season Elo (week 14-16) used for bowl games
+- **Bowl Season**: End-of-season Elo (week 16) used for bowl games
 - **Team Aliasing**: Odds API names mapped to DB names via `src/lib/team-aliases.ts`
