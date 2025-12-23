@@ -518,6 +518,52 @@ export default function ModelPage() {
             </div>
           </div>
 
+          <h3 className="text-lg font-semibold text-white mt-6 mb-3">Year-by-Year: Favorites Strategy</h3>
+          <div className="overflow-hidden rounded-lg border border-emerald-500/20 mb-6">
+            <table className="w-full text-sm">
+              <thead className="bg-emerald-900/20">
+                <tr>
+                  <th className="px-4 py-3 text-left text-emerald-400 font-medium">Season</th>
+                  <th className="px-4 py-3 text-right text-emerald-400 font-medium">Bets</th>
+                  <th className="px-4 py-3 text-right text-emerald-400 font-medium">Win%</th>
+                  <th className="px-4 py-3 text-right text-emerald-400 font-medium">ROI</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-800">
+                <tr className="bg-zinc-900/30">
+                  <td className="px-4 py-3 text-white">2022</td>
+                  <td className="px-4 py-3 text-right text-zinc-300">216</td>
+                  <td className="px-4 py-3 text-right text-zinc-400">52.3%</td>
+                  <td className="px-4 py-3 text-right text-zinc-400">-0.1%</td>
+                </tr>
+                <tr className="bg-zinc-900/30">
+                  <td className="px-4 py-3 text-white">2023</td>
+                  <td className="px-4 py-3 text-right text-zinc-300">208</td>
+                  <td className="px-4 py-3 text-right text-zinc-400">51.0%</td>
+                  <td className="px-4 py-3 text-right text-red-400">-2.7%</td>
+                </tr>
+                <tr className="bg-zinc-900/30">
+                  <td className="px-4 py-3 text-white">2024</td>
+                  <td className="px-4 py-3 text-right text-zinc-300">235</td>
+                  <td className="px-4 py-3 text-right text-emerald-400 font-medium">56.6%</td>
+                  <td className="px-4 py-3 text-right text-emerald-400 font-medium">+8.0%</td>
+                </tr>
+                <tr className="bg-zinc-900/30">
+                  <td className="px-4 py-3 text-white">2025</td>
+                  <td className="px-4 py-3 text-right text-zinc-300">198</td>
+                  <td className="px-4 py-3 text-right text-emerald-400 font-medium">58.1%</td>
+                  <td className="px-4 py-3 text-right text-emerald-400 font-medium">+10.9%</td>
+                </tr>
+                <tr className="bg-emerald-500/10">
+                  <td className="px-4 py-3 text-white font-bold">Total</td>
+                  <td className="px-4 py-3 text-right text-white font-bold">857</td>
+                  <td className="px-4 py-3 text-right text-emerald-400 font-bold">54.5%</td>
+                  <td className="px-4 py-3 text-right text-emerald-400 font-bold">+4.0%</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
           <h3 className="text-lg font-semibold text-white mt-6 mb-3">Year-by-Year: Underdogs Strategy</h3>
           <div className="overflow-hidden rounded-lg border border-amber-500/20 mb-6">
             <table className="w-full text-sm">
