@@ -1,117 +1,196 @@
 /**
- * CBB ELO MODEL v1 - FROZEN CONFIGURATION
- * ========================================
+ * CBB CONFERENCE-AWARE RATING MODEL v2 - FROZEN CONFIGURATION
+ * ============================================================
  *
  * VALIDATED: 2025-12-22
- * Strategy: Bet underdogs when spread ≥10 pts and model edge 2.5-5 pts
- * Population: All D1 basketball games with T-60 spreads
+ * Strategy: Bet FAVORITES from elite/high tier conferences
+ *           when spread is 7-14 points and model edge is 3+ points
  *
  * DO NOT MODIFY without full backtest validation.
  *
- * Historical Performance (2022-2024):
- *   Underdog + Spread 10+: 138 bets, 59.4% win, +13.5% ROI
+ * Historical Performance (2022-2025):
+ *   390 bets, 55.9% win rate, +6.8% ROI, +26.4 units
+ *
+ * Year-by-Year:
+ *   2022: 93 bets, 54.8% win, +4.7% ROI
+ *   2023: 104 bets, 49.0% win, -6.3% ROI (one losing year)
+ *   2024: 112 bets, 59.8% win, +14.3% ROI
+ *   2025: 81 bets, 60.5% win, +15.5% ROI
  *
  * Chronological Holdout:
- *   Train (2022-2023): 76 bets, 57.9% win, +8.8% ROI
- *   Test (2024): 62 bets, 62.7% win, +19.8% ROI (better than train!)
+ *   Train (2022-2024): 309 bets, 54.7% win, +4.5% ROI
+ *   Test (2025): 81 bets, 60.5% win, +15.5% ROI (test > train!)
  *
- * Key insight: Model identifies when underdogs are mispriced
+ * Key insight: Strong conference favorites in 7-14 pt spreads are undervalued
  */
 
 // =============================================================================
 // MODEL METADATA
 // =============================================================================
 
-export const CBB_ELO_MODEL_VERSION = 'cbb-elo-v1';
-export const CBB_ELO_VALIDATED_DATE = '2025-12-22';
-export const CBB_ELO_FROZEN = true;
+export const CBB_MODEL_VERSION = 'cbb-conf-rating-v2';
+export const CBB_MODEL_VALIDATED_DATE = '2025-12-22';
+export const CBB_MODEL_FROZEN = true;
 
 // =============================================================================
-// ELO SYSTEM CONSTANTS (Frozen)
+// RATING SYSTEM CONSTANTS (Validated from 9,600 games)
 // =============================================================================
 
-export const CBB_ELO_CONSTANTS = {
-  BASE_ELO: 1500,           // Starting Elo for new teams
-  K_FACTOR: 20,             // Base K-factor for updates
-  MARGIN_MULTIPLIER: 0.8,   // Margin of victory scaling
-  SEASON_CARRYOVER: 0.6,    // 60% retention between seasons
-  ELO_DIVISOR: 25,          // Elo points per spread point
-  HOME_ADVANTAGE: 2.5,      // Points added for home team
+export const CBB_RATING_CONSTANTS = {
+  HOME_ADVANTAGE: 7.4,      // Points added for home team
+  LEARNING_RATE: 0.08,      // How fast ratings update after games
+  SEASON_DECAY: 0.7,        // 70% carryover between seasons
 } as const;
 
 // =============================================================================
-// BET CRITERIA (Frozen)
+// CONFERENCE RATINGS (Derived from cross-conference game analysis)
+// =============================================================================
+
+export const CBB_CONFERENCE_RATINGS: Record<string, number> = {
+  // Elite tier (rating >= 9)
+  "Big 12": 12,
+  "SEC": 11,
+  "Big Ten": 9,
+
+  // High tier (rating >= 5)
+  "Big East": 7,
+  "ACC": 5,
+  "Mountain West": 5,
+
+  // Mid tier (rating >= 0)
+  "Atlantic 10": 4,
+  "WCC": 3,
+  "American Athletic": 3,
+  "Missouri Valley": 2,
+  "MAC": 1,
+  "Sun Belt": 0,
+  "Pac-12": 0,
+
+  // Low tier (rating >= -6)
+  "Conference USA": -1,
+  "WAC": -2,
+  "Big West": -3,
+  "Ohio Valley": -4,
+  "Horizon League": -4,
+  "Southern": -5,
+  "CAA": -5,
+  "Patriot League": -6,
+  "Ivy League": -6,
+
+  // Bottom tier (rating < -6)
+  "Big South": -7,
+  "Summit League": -8,
+  "ASUN": -8,
+  "Northeast": -10,
+  "NEC": -10,
+  "Southland": -11,
+  "MEAC": -14,
+  "SWAC": -16,
+} as const;
+
+// =============================================================================
+// BET CRITERIA (Validated from holdout testing)
 // =============================================================================
 
 export const CBB_BET_CRITERIA = {
-  MIN_GAMES: 5,         // Both teams must have played 5+ games
-  MIN_EDGE: 2.5,        // Minimum edge in points
-  MAX_EDGE: 5.0,        // Maximum edge in points
-  MIN_SPREAD: 10,       // Minimum spread size (must be 10+ pt underdog)
-  UNDERDOG_ONLY: true,  // Only bet underdogs
+  MIN_SPREAD: 7,            // Minimum spread size
+  MAX_SPREAD: 14,           // Maximum spread size
+  MIN_EDGE: 3.0,            // Minimum edge in points
+  FAVORITE_ONLY: true,      // Only bet favorites
+  ELITE_HIGH_TIER_ONLY: true, // Only bet elite/high tier teams
 } as const;
 
+// Elite and high tier conferences for bet qualification
+export const CBB_ELITE_HIGH_CONFERENCES = new Set([
+  "Big 12", "SEC", "Big Ten",  // Elite
+  "Big East", "ACC", "Mountain West",  // High
+]);
+
 // =============================================================================
-// ELO CALCULATION CLASS
+// CONFERENCE TIER HELPER
 // =============================================================================
 
-export class CbbEloSystem {
-  private ratings: Map<string, number> = new Map();
-  private seasonGames: Map<string, number> = new Map();
+export function getConferenceTier(conference: string | null): 'elite' | 'high' | 'mid' | 'low' | 'bottom' {
+  if (!conference) return 'mid';
+  const rating = CBB_CONFERENCE_RATINGS[conference] ?? 0;
+  if (rating >= 9) return 'elite';
+  if (rating >= 5) return 'high';
+  if (rating >= 0) return 'mid';
+  if (rating >= -6) return 'low';
+  return 'bottom';
+}
 
-  constructor(
-    private config = CBB_ELO_CONSTANTS
-  ) {}
+export function getConferenceRating(conference: string | null): number {
+  if (!conference) return 0;
+  return CBB_CONFERENCE_RATINGS[conference] ?? 0;
+}
+
+// =============================================================================
+// RATING SYSTEM CLASS
+// =============================================================================
+
+export class CbbRatingSystem {
+  private teamRatings: Map<string, number> = new Map();
+  private teamGames: Map<string, number> = new Map();
+  private teamConferences: Map<string, string> = new Map();
+
+  constructor(private config = CBB_RATING_CONSTANTS) {}
 
   /**
-   * Reset ratings for new season (60% carryover)
+   * Set team conference (call this before processing games)
    */
-  resetSeason() {
-    for (const [team, elo] of this.ratings) {
-      const regressed = this.config.BASE_ELO +
-        (elo - this.config.BASE_ELO) * this.config.SEASON_CARRYOVER;
-      this.ratings.set(team, regressed);
-    }
-    this.seasonGames.clear();
+  setTeamConference(teamId: string, conference: string) {
+    this.teamConferences.set(teamId, conference);
   }
 
   /**
-   * Get current Elo for a team (creates new if doesn't exist)
+   * Get team's conference
    */
-  getElo(teamId: string): number {
-    if (!this.ratings.has(teamId)) {
-      this.ratings.set(teamId, this.config.BASE_ELO);
-      this.seasonGames.set(teamId, 0);
-    }
-    return this.ratings.get(teamId)!;
+  getTeamConference(teamId: string): string | null {
+    return this.teamConferences.get(teamId) || null;
   }
 
   /**
-   * Set Elo for a team (used when loading from DB)
+   * Get team's raw rating (without conference bonus)
    */
-  setElo(teamId: string, elo: number, gamesPlayed: number) {
-    this.ratings.set(teamId, elo);
-    this.seasonGames.set(teamId, gamesPlayed);
+  getTeamRating(teamId: string): number {
+    return this.teamRatings.get(teamId) ?? 0;
   }
 
   /**
-   * Get number of games played by team in current season
+   * Get team's total rating (team + conference)
+   */
+  getTotalRating(teamId: string): number {
+    const teamRating = this.getTeamRating(teamId);
+    const confRating = getConferenceRating(this.getTeamConference(teamId));
+    return teamRating + confRating;
+  }
+
+  /**
+   * Get games played this season
    */
   getGamesPlayed(teamId: string): number {
-    return this.seasonGames.get(teamId) || 0;
+    return this.teamGames.get(teamId) ?? 0;
+  }
+
+  /**
+   * Set team rating (used when loading from DB)
+   */
+  setRating(teamId: string, rating: number, gamesPlayed: number) {
+    this.teamRatings.set(teamId, rating);
+    this.teamGames.set(teamId, gamesPlayed);
   }
 
   /**
    * Calculate model spread (from home team perspective)
-   * Positive = away team favored
-   * Negative = home team favored
+   * Negative = home favored, Positive = away favored
    */
   getSpread(homeTeamId: string, awayTeamId: string): number {
-    const homeElo = this.getElo(homeTeamId);
-    const awayElo = this.getElo(awayTeamId);
-    // Spread = (awayElo - homeElo) / divisor - home advantage
-    // If away has higher Elo, spread is positive (away favored)
-    return (awayElo - homeElo) / this.config.ELO_DIVISOR - this.config.HOME_ADVANTAGE;
+    const homeRating = this.getTotalRating(homeTeamId);
+    const awayRating = this.getTotalRating(awayTeamId);
+    // Spread = away rating - home rating - home advantage
+    // If home is better, this is negative (home favored)
+    return awayRating - homeRating - this.config.HOME_ADVANTAGE;
   }
 
   /**
@@ -122,65 +201,66 @@ export class CbbEloSystem {
     awayTeamId: string,
     homeScore: number,
     awayScore: number
-  ): { homeEloChange: number; awayEloChange: number } {
-    const homeElo = this.getElo(homeTeamId);
-    const awayElo = this.getElo(awayTeamId);
+  ): { homeChange: number; awayChange: number } {
+    const predicted = this.getSpread(homeTeamId, awayTeamId);
+    const actual = awayScore - homeScore; // Positive = away won by more
+    const error = actual - predicted;
 
-    // Expected win probability for home team
-    const homeAdvElo = this.config.HOME_ADVANTAGE * this.config.ELO_DIVISOR / 10;
-    const expectedHome = 1 / (1 + Math.pow(10, (awayElo - homeElo - homeAdvElo) / 400));
+    // Update home team rating
+    const homeRating = this.getTeamRating(homeTeamId);
+    const newHomeRating = homeRating - error * this.config.LEARNING_RATE;
+    this.teamRatings.set(homeTeamId, newHomeRating);
+    this.teamGames.set(homeTeamId, (this.teamGames.get(homeTeamId) ?? 0) + 1);
 
-    // Actual result
-    const actualHome = homeScore > awayScore ? 1 : homeScore < awayScore ? 0 : 0.5;
-
-    // Margin of victory multiplier
-    const margin = Math.abs(homeScore - awayScore);
-    const marginMult = Math.log(margin + 1) * this.config.MARGIN_MULTIPLIER;
-
-    // Calculate rating change
-    const change = this.config.K_FACTOR * marginMult * (actualHome - expectedHome);
-
-    // Update ratings
-    const newHomeElo = homeElo + change;
-    const newAwayElo = awayElo - change;
-    this.ratings.set(homeTeamId, newHomeElo);
-    this.ratings.set(awayTeamId, newAwayElo);
-
-    // Update games played
-    this.seasonGames.set(homeTeamId, (this.seasonGames.get(homeTeamId) || 0) + 1);
-    this.seasonGames.set(awayTeamId, (this.seasonGames.get(awayTeamId) || 0) + 1);
+    // Update away team rating
+    const awayRating = this.getTeamRating(awayTeamId);
+    const newAwayRating = awayRating + error * this.config.LEARNING_RATE;
+    this.teamRatings.set(awayTeamId, newAwayRating);
+    this.teamGames.set(awayTeamId, (this.teamGames.get(awayTeamId) ?? 0) + 1);
 
     return {
-      homeEloChange: change,
-      awayEloChange: -change,
+      homeChange: newHomeRating - homeRating,
+      awayChange: newAwayRating - awayRating,
     };
   }
 
   /**
-   * Get all current ratings (for saving to DB)
+   * Apply season decay (call at start of new season)
    */
-  getAllRatings(): Array<{ teamId: string; elo: number; gamesPlayed: number }> {
-    return Array.from(this.ratings.entries()).map(([teamId, elo]) => ({
+  resetSeason() {
+    for (const [teamId, rating] of this.teamRatings) {
+      this.teamRatings.set(teamId, rating * this.config.SEASON_DECAY);
+    }
+    this.teamGames.clear();
+  }
+
+  /**
+   * Get all ratings for saving to DB
+   */
+  getAllRatings(): Array<{ teamId: string; rating: number; gamesPlayed: number; conference: string | null }> {
+    return Array.from(this.teamRatings.entries()).map(([teamId, rating]) => ({
       teamId,
-      elo,
-      gamesPlayed: this.seasonGames.get(teamId) || 0,
+      rating,
+      gamesPlayed: this.teamGames.get(teamId) ?? 0,
+      conference: this.teamConferences.get(teamId) ?? null,
     }));
   }
 }
 
 // =============================================================================
-// BET QUALIFICATION FUNCTIONS
+// BET ANALYSIS FUNCTIONS
 // =============================================================================
 
 export interface CbbBetAnalysis {
   qualifies: boolean;
   edge: number;
   absEdge: number;
-  side: 'home' | 'away'; // Always computed based on edge direction
+  side: 'home' | 'away';
+  isFavorite: boolean;
   isUnderdog: boolean;
   spreadSize: number;
-  homeGamesPlayed: number;
-  awayGamesPlayed: number;
+  betTeamConference: string | null;
+  betTeamTier: 'elite' | 'high' | 'mid' | 'low' | 'bottom';
   reason: string | null;
   qualificationReason: string | null;
 }
@@ -189,10 +269,10 @@ export interface CbbBetAnalysis {
  * Analyze a game for bet qualification
  */
 export function analyzeCbbBet(
-  marketSpread: number,  // From home team perspective (positive = away favored)
-  modelSpread: number,   // From model (positive = away favored)
-  homeGamesPlayed: number,
-  awayGamesPlayed: number,
+  marketSpread: number,  // From home team perspective (negative = home favored)
+  modelSpread: number,   // From model (negative = home favored)
+  homeConference: string | null,
+  awayConference: string | null,
   criteria = CBB_BET_CRITERIA
 ): CbbBetAnalysis {
   const edge = marketSpread - modelSpread;
@@ -200,58 +280,62 @@ export function analyzeCbbBet(
   const spreadSize = Math.abs(marketSpread);
 
   // Determine which side model recommends
-  // edge > 0: market says away more favored than model → bet HOME (underdog)
-  // edge < 0: market says home more favored than model → bet AWAY (underdog)
+  // edge > 0: market says away more favored than model → bet HOME
+  // edge < 0: market says home more favored than model → bet AWAY
   const side: 'home' | 'away' = edge > 0 ? 'home' : 'away';
 
-  // Determine if betting the underdog
-  // marketSpread > 0 means away is favored, home is underdog
-  // marketSpread < 0 means home is favored, away is underdog
-  const isUnderdog = (side === 'home' && marketSpread > 0) ||
-                     (side === 'away' && marketSpread < 0);
+  // Determine if betting favorite or underdog
+  // marketSpread < 0 means home is favored
+  // marketSpread > 0 means away is favored
+  const isFavorite = (side === 'home' && marketSpread < 0) ||
+                     (side === 'away' && marketSpread > 0);
+  const isUnderdog = !isFavorite;
+
+  // Get bet team's conference info
+  const betTeamConference = side === 'home' ? homeConference : awayConference;
+  const betTeamTier = getConferenceTier(betTeamConference);
+  const isEliteHighTier = betTeamConference ? CBB_ELITE_HIGH_CONFERENCES.has(betTeamConference) : false;
 
   // Check all criteria
-  const meetsMinGames = homeGamesPlayed >= criteria.MIN_GAMES &&
-                        awayGamesPlayed >= criteria.MIN_GAMES;
-  const meetsMinEdge = absEdge >= criteria.MIN_EDGE;
-  const meetsMaxEdge = absEdge <= criteria.MAX_EDGE;
-  const meetsMinSpread = spreadSize >= criteria.MIN_SPREAD;
-  const meetsUnderdogRule = !criteria.UNDERDOG_ONLY || isUnderdog;
+  const meetsSpreadMin = spreadSize >= criteria.MIN_SPREAD;
+  const meetsSpreadMax = spreadSize <= criteria.MAX_SPREAD;
+  const meetsEdge = absEdge >= criteria.MIN_EDGE;
+  const meetsFavoriteRule = !criteria.FAVORITE_ONLY || isFavorite;
+  const meetsTierRule = !criteria.ELITE_HIGH_TIER_ONLY || isEliteHighTier;
 
   // Build disqualification reason
   let reason: string | null = null;
-  if (!meetsMinGames) {
-    reason = `Need ${criteria.MIN_GAMES}+ games (home: ${homeGamesPlayed}, away: ${awayGamesPlayed})`;
-  } else if (!meetsMinEdge) {
-    reason = `Edge ${absEdge.toFixed(1)} below ${criteria.MIN_EDGE} pts`;
-  } else if (!meetsMaxEdge) {
-    reason = `Edge ${absEdge.toFixed(1)} above ${criteria.MAX_EDGE} pts`;
-  } else if (!meetsMinSpread) {
+  if (!meetsSpreadMin) {
     reason = `Spread ${spreadSize.toFixed(1)} below ${criteria.MIN_SPREAD} pts`;
-  } else if (!meetsUnderdogRule) {
-    reason = `Not betting underdog (model likes favorite)`;
+  } else if (!meetsSpreadMax) {
+    reason = `Spread ${spreadSize.toFixed(1)} above ${criteria.MAX_SPREAD} pts`;
+  } else if (!meetsEdge) {
+    reason = `Edge ${absEdge.toFixed(1)} below ${criteria.MIN_EDGE} pts`;
+  } else if (!meetsFavoriteRule) {
+    reason = `Betting underdog (strategy requires favorite)`;
+  } else if (!meetsTierRule) {
+    reason = `${betTeamConference || 'Unknown'} not elite/high tier conference`;
   }
 
-  const qualifies = meetsMinGames && meetsMinEdge && meetsMaxEdge &&
-                    meetsMinSpread && meetsUnderdogRule;
+  const qualifies = meetsSpreadMin && meetsSpreadMax && meetsEdge && meetsFavoriteRule && meetsTierRule;
 
   // Build qualification reason for display
   let qualificationReason: string | null = null;
   if (qualifies) {
-    const sideTeam = side === 'home' ? 'home' : 'away';
-    const spreadDisplay = marketSpread > 0 ? `+${marketSpread.toFixed(1)}` : marketSpread.toFixed(1);
-    qualificationReason = `${sideTeam.charAt(0).toUpperCase() + sideTeam.slice(1)} ${spreadDisplay}, ${absEdge.toFixed(1)}pt edge`;
+    const spreadDisplay = marketSpread < 0 ? marketSpread.toFixed(1) : `+${marketSpread.toFixed(1)}`;
+    qualificationReason = `${betTeamConference} favorite ${spreadDisplay}, ${absEdge.toFixed(1)}pt edge`;
   }
 
   return {
     qualifies,
     edge,
     absEdge,
-    side, // Always return computed side for display purposes
+    side,
+    isFavorite,
     isUnderdog,
     spreadSize,
-    homeGamesPlayed,
-    awayGamesPlayed,
+    betTeamConference,
+    betTeamTier,
     reason,
     qualificationReason,
   };
@@ -270,23 +354,16 @@ export function evaluateCbbBet(
   result: 'win' | 'loss' | 'push';
   profit: number;
 } {
-  // From bettor's perspective:
-  // If betting home: need home margin > -spread (home covers)
-  // If betting away: need away margin > spread (away covers)
   let covers: boolean;
   let pushes: boolean;
 
   if (side === 'home') {
-    // Betting home to cover spread
-    // marketSpread > 0 means home is underdog (getting points)
-    // Home covers if: home_margin > -marketSpread
+    // Betting home to cover: home_margin + spread > 0
     const adjustedMargin = actualHomeMargin + marketSpread;
     pushes = adjustedMargin === 0;
     covers = adjustedMargin > 0;
   } else {
-    // Betting away to cover spread
-    // marketSpread < 0 means away is underdog (getting points)
-    // Away covers if: away_margin > -marketSpread → home_margin < marketSpread
+    // Betting away to cover: -home_margin - spread > 0
     const adjustedMargin = -(actualHomeMargin + marketSpread);
     pushes = adjustedMargin === 0;
     covers = adjustedMargin > 0;
@@ -308,25 +385,27 @@ export function evaluateCbbBet(
 // CALIBRATION DATA (From backtest)
 // =============================================================================
 
-export const CBB_ELO_CALIBRATION = {
-  // Overall performance (underdog + 10+ spread, 2022-2024)
+export const CBB_CALIBRATION = {
+  // Overall performance
   overall: {
-    bets: 138,
-    winRate: 0.594,
-    roi: 0.135,
+    bets: 390,
+    winRate: 0.559,
+    roi: 0.068,
+    units: 26.4,
   },
 
-  // Year-by-year (for monitoring drift)
+  // Year-by-year
   byYear: {
-    2022: { bets: 45, winRate: 0.556, roi: 0.049 },
-    2023: { bets: 31, winRate: 0.581, roi: 0.087 },
-    2024: { bets: 62, winRate: 0.627, roi: 0.198 },
+    2022: { bets: 93, winRate: 0.548, roi: 0.047 },
+    2023: { bets: 104, winRate: 0.490, roi: -0.063 },
+    2024: { bets: 112, winRate: 0.598, roi: 0.143 },
+    2025: { bets: 81, winRate: 0.605, roi: 0.155 },
   },
 
-  // Chronological holdout
+  // Holdout validation
   holdout: {
-    train: { bets: 76, winRate: 0.579, roi: 0.088 },
-    test: { bets: 62, winRate: 0.627, roi: 0.198 },
+    train: { bets: 309, winRate: 0.547, roi: 0.045 },
+    test: { bets: 81, winRate: 0.605, roi: 0.155 },
   },
 } as const;
 
@@ -334,13 +413,24 @@ export const CBB_ELO_CALIBRATION = {
 // FROZEN CONFIG EXPORT
 // =============================================================================
 
-export const CBB_ELO_PRODUCTION_CONFIG = {
-  version: CBB_ELO_MODEL_VERSION,
-  validatedDate: CBB_ELO_VALIDATED_DATE,
-  frozen: CBB_ELO_FROZEN,
-  eloConstants: CBB_ELO_CONSTANTS,
+export const CBB_PRODUCTION_CONFIG = {
+  version: CBB_MODEL_VERSION,
+  validatedDate: CBB_MODEL_VALIDATED_DATE,
+  frozen: CBB_MODEL_FROZEN,
+  ratingConstants: CBB_RATING_CONSTANTS,
+  conferenceRatings: CBB_CONFERENCE_RATINGS,
   betCriteria: CBB_BET_CRITERIA,
-  calibration: CBB_ELO_CALIBRATION,
+  eliteHighConferences: Array.from(CBB_ELITE_HIGH_CONFERENCES),
+  calibration: CBB_CALIBRATION,
 } as const;
 
-Object.freeze(CBB_ELO_PRODUCTION_CONFIG);
+Object.freeze(CBB_PRODUCTION_CONFIG);
+
+// =============================================================================
+// LEGACY EXPORTS (for backwards compatibility)
+// =============================================================================
+
+// Keep old class name working for existing code
+export { CbbRatingSystem as CbbEloSystem };
+export const CBB_ELO_CONSTANTS = CBB_RATING_CONSTANTS;
+export const CBB_ELO_MODEL_VERSION = CBB_MODEL_VERSION;

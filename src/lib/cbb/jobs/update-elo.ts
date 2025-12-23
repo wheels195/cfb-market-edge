@@ -1,12 +1,18 @@
 /**
- * CBB Update Elo Job
+ * CBB Update Rating Job (Conference-Aware Model v2)
  *
- * Processes completed games and updates Elo ratings
+ * Processes completed games and updates team ratings.
+ * Uses the validated conference-aware rating system.
  * Run daily after games complete (e.g., 6:30 AM)
+ *
+ * The ratings update after every game using:
+ *   Rating_new = Rating_old + LEARNING_RATE × (Actual - Predicted)
+ *
+ * Conference bonuses are NOT stored - they come from CBB_CONFERENCE_RATINGS
  */
 
 import { supabase } from '@/lib/db/client';
-import { CbbEloSystem, CBB_ELO_CONSTANTS } from '@/lib/models/cbb-elo';
+import { CbbRatingSystem, CBB_RATING_CONSTANTS } from '@/lib/models/cbb-elo';
 
 export interface CbbUpdateEloResult {
   gamesProcessed: number;
@@ -35,10 +41,35 @@ function getCurrentSeason(): number {
 }
 
 /**
- * Load current Elo ratings from database
+ * Load team conferences from database
  */
-async function loadEloRatings(
-  elo: CbbEloSystem,
+async function loadTeamConferences(
+  ratingSystem: CbbRatingSystem
+): Promise<number> {
+  const { data, error } = await supabase
+    .from('cbb_teams')
+    .select('id, conference');
+
+  if (error) {
+    console.error('Error loading team conferences:', error);
+    return 0;
+  }
+
+  for (const team of data || []) {
+    if (team.conference) {
+      ratingSystem.setTeamConference(team.id, team.conference);
+    }
+  }
+
+  return data?.length || 0;
+}
+
+/**
+ * Load current ratings from database
+ * Note: DB column is 'elo' for backwards compatibility, but stores team rating
+ */
+async function loadRatings(
+  ratingSystem: CbbRatingSystem,
   season: number
 ): Promise<number> {
   const { data, error } = await supabase
@@ -47,31 +78,33 @@ async function loadEloRatings(
     .eq('season', season);
 
   if (error) {
-    console.error('Error loading Elo ratings:', error);
+    console.error('Error loading ratings:', error);
     return 0;
   }
 
   for (const row of data || []) {
-    elo.setElo(row.team_id, row.elo, row.games_played);
+    // DB column is 'elo' but it stores the team rating value
+    ratingSystem.setRating(row.team_id, row.elo, row.games_played);
   }
 
   return data?.length || 0;
 }
 
 /**
- * Save updated Elo ratings to database
+ * Save updated ratings to database
+ * Note: DB column is 'elo' for backwards compatibility, but stores team rating
  */
-async function saveEloRatings(
-  elo: CbbEloSystem,
+async function saveRatings(
+  ratingSystem: CbbRatingSystem,
   season: number
 ): Promise<number> {
-  const ratings = elo.getAllRatings();
+  const ratings = ratingSystem.getAllRatings();
 
   const snapshots = ratings.map(r => ({
     team_id: r.teamId,
     season,
     games_played: r.gamesPlayed,
-    elo: r.elo,
+    elo: r.rating, // DB column is 'elo', stores the team rating
     updated_at: new Date().toISOString(),
   }));
 
@@ -108,13 +141,13 @@ async function getUnprocessedGames(season: number): Promise<Array<{
   home_score: number;
   away_score: number;
 }>> {
-  // Get games with scores that don't have Elo updates
+  // Get completed games (CBBD uses 0 for upcoming, not null)
   // D1 filter: only process games where both teams are matched
   const { data: games, error } = await supabase
     .from('cbb_games')
     .select('id, start_date, home_team_id, away_team_id, home_score, away_score')
     .eq('season', season)
-    .not('home_score', 'is', null)
+    .or('home_score.neq.0,away_score.neq.0') // Completed games only
     .not('home_team_id', 'is', null) // D1 filter
     .not('away_team_id', 'is', null) // D1 filter
     .order('start_date', { ascending: true });
@@ -128,7 +161,13 @@ async function getUnprocessedGames(season: number): Promise<Array<{
 }
 
 /**
- * Update Elo ratings for completed games
+ * Update ratings for completed games
+ *
+ * This job runs daily and processes any new completed games.
+ * It uses the conference-aware rating model:
+ * - Team ratings update with LEARNING_RATE = 0.08
+ * - Conference bonuses come from CBB_CONFERENCE_RATINGS (not stored per-team)
+ * - HOME_ADVANTAGE = 7.4 points
  */
 export async function updateCbbElo(): Promise<CbbUpdateEloResult> {
   const result: CbbUpdateEloResult = {
@@ -139,13 +178,18 @@ export async function updateCbbElo(): Promise<CbbUpdateEloResult> {
 
   try {
     const season = getCurrentSeason();
-    console.log(`Processing CBB Elo updates for season ${season}`);
+    console.log(`Processing CBB rating updates for season ${season}`);
+    console.log(`Using model: HOME_ADV=${CBB_RATING_CONSTANTS.HOME_ADVANTAGE}, LR=${CBB_RATING_CONSTANTS.LEARNING_RATE}`);
 
-    // Initialize Elo system
-    const elo = new CbbEloSystem();
+    // Initialize rating system
+    const ratingSystem = new CbbRatingSystem();
+
+    // Load team conferences (needed for spread calculations)
+    const confCount = await loadTeamConferences(ratingSystem);
+    console.log(`Loaded ${confCount} team conferences`);
 
     // Load existing ratings
-    const existingCount = await loadEloRatings(elo, season);
+    const existingCount = await loadRatings(ratingSystem, season);
     console.log(`Loaded ${existingCount} existing ratings`);
 
     // Get all completed games for this season
@@ -164,8 +208,8 @@ export async function updateCbbElo(): Promise<CbbUpdateEloResult> {
 
       try {
         // Check if both teams have correct games_played count
-        const homeGames = elo.getGamesPlayed(game.home_team_id);
-        const awayGames = elo.getGamesPlayed(game.away_team_id);
+        const homeGames = ratingSystem.getGamesPlayed(game.home_team_id);
+        const awayGames = ratingSystem.getGamesPlayed(game.away_team_id);
 
         // Count how many games each team should have played
         const homeGamesInDb = games.filter(g =>
@@ -181,7 +225,7 @@ export async function updateCbbElo(): Promise<CbbUpdateEloResult> {
         // If games played doesn't match, need to process this game
         if (homeGames === homeGamesInDb && awayGames === awayGamesInDb) {
           // Process this game
-          elo.update(
+          ratingSystem.update(
             game.home_team_id,
             game.away_team_id,
             game.home_score,
@@ -197,7 +241,7 @@ export async function updateCbbElo(): Promise<CbbUpdateEloResult> {
     }
 
     // Save updated ratings
-    result.ratingsUpdated = await saveEloRatings(elo, season);
+    result.ratingsUpdated = await saveRatings(ratingSystem, season);
 
     console.log(`Processed ${result.gamesProcessed} games, updated ${result.ratingsUpdated} ratings`);
   } catch (err) {
@@ -209,7 +253,7 @@ export async function updateCbbElo(): Promise<CbbUpdateEloResult> {
 }
 
 /**
- * Full rebuild of Elo ratings for a season
+ * Full rebuild of ratings for a season
  * Use when you need to recalculate from scratch
  */
 export async function rebuildCbbElo(season: number): Promise<CbbUpdateEloResult> {
@@ -220,22 +264,28 @@ export async function rebuildCbbElo(season: number): Promise<CbbUpdateEloResult>
   };
 
   try {
-    console.log(`Rebuilding CBB Elo for season ${season}`);
+    console.log(`Rebuilding CBB ratings for season ${season}`);
+    console.log(`Using model: HOME_ADV=${CBB_RATING_CONSTANTS.HOME_ADVANTAGE}, LR=${CBB_RATING_CONSTANTS.LEARNING_RATE}, DECAY=${CBB_RATING_CONSTANTS.SEASON_DECAY}`);
 
-    const elo = new CbbEloSystem();
+    const ratingSystem = new CbbRatingSystem();
+
+    // Load team conferences (needed for spread calculations)
+    const confCount = await loadTeamConferences(ratingSystem);
+    console.log(`Loaded ${confCount} team conferences`);
 
     // Load prior season for carryover
     if (season > 2020) {
-      await loadEloRatings(elo, season - 1);
-      elo.resetSeason();
+      await loadRatings(ratingSystem, season - 1);
+      ratingSystem.resetSeason(); // Apply SEASON_DECAY
+      console.log(`Applied ${CBB_RATING_CONSTANTS.SEASON_DECAY * 100}% carryover from ${season - 1}`);
     }
 
-    // Get all completed games (D1 only)
+    // Get all completed games (D1 only) - CBBD uses 0 for upcoming, not null
     const { data: games, error } = await supabase
       .from('cbb_games')
       .select('id, start_date, home_team_id, away_team_id, home_score, away_score')
       .eq('season', season)
-      .not('home_score', 'is', null)
+      .or('home_score.neq.0,away_score.neq.0') // Completed games only
       .not('home_team_id', 'is', null) // D1 filter
       .not('away_team_id', 'is', null) // D1 filter
       .order('start_date', { ascending: true });
@@ -245,9 +295,9 @@ export async function rebuildCbbElo(season: number): Promise<CbbUpdateEloResult>
       return result;
     }
 
-    // Process all games
+    // Process all games in chronological order
     for (const game of games || []) {
-      elo.update(
+      ratingSystem.update(
         game.home_team_id,
         game.away_team_id,
         game.home_score,
@@ -257,7 +307,7 @@ export async function rebuildCbbElo(season: number): Promise<CbbUpdateEloResult>
     }
 
     // Save ratings
-    result.ratingsUpdated = await saveEloRatings(elo, season);
+    result.ratingsUpdated = await saveRatings(ratingSystem, season);
 
     console.log(`Rebuilt ${result.gamesProcessed} games, saved ${result.ratingsUpdated} ratings`);
   } catch (err) {

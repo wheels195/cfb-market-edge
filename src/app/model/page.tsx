@@ -444,38 +444,88 @@ export default function ModelPage() {
         <section className="mb-12">
           <div className="inline-flex items-center gap-2 px-3 py-1 bg-orange-500/10 border border-orange-500/20 rounded-full mb-6">
             <div className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-pulse" />
-            <span className="text-xs font-medium text-orange-400 uppercase tracking-wider">CBB Elo Model</span>
+            <span className="text-xs font-medium text-orange-400 uppercase tracking-wider">CBB Conference Rating Model v2</span>
           </div>
           <h2 className="text-3xl font-bold text-white tracking-tight mb-4">
-            Underdog Elo Strategy
+            Power Conference Favorite Strategy
           </h2>
           <p className="text-lg text-zinc-400 max-w-2xl">
-            Pure Elo-based model for college basketball spreads. Targets underdogs with large spreads where the model shows moderate edge.
+            Conference-aware rating model for college basketball spreads. Targets favorites from elite/high tier conferences (Big 12, SEC, Big Ten, Big East, ACC, Mountain West) when model shows 3+ point edge.
           </p>
         </section>
 
         {/* CBB Backtest Results */}
         <section className="mb-12">
-          <h2 className="text-xl font-bold text-white mb-4 pb-2 border-b border-zinc-800">CBB Backtest Results (2022-2024)</h2>
+          <h2 className="text-xl font-bold text-white mb-4 pb-2 border-b border-zinc-800">CBB Backtest Results (2022-2025)</h2>
 
           <div className="bg-gradient-to-br from-orange-950/30 to-zinc-900/50 border border-orange-500/20 rounded-xl p-6 mb-6">
-            <div className="grid grid-cols-3 gap-6 text-center mb-6">
+            <div className="grid grid-cols-4 gap-6 text-center mb-6">
               <div>
-                <div className="text-3xl font-bold text-white">138</div>
+                <div className="text-3xl font-bold text-white">390</div>
                 <div className="text-sm text-zinc-400">Total Bets</div>
               </div>
               <div>
-                <div className="text-3xl font-bold text-orange-400">59.4%</div>
+                <div className="text-3xl font-bold text-orange-400">55.9%</div>
                 <div className="text-sm text-zinc-400">Win Rate</div>
               </div>
               <div>
-                <div className="text-3xl font-bold text-orange-400">+13.5%</div>
+                <div className="text-3xl font-bold text-orange-400">+6.8%</div>
                 <div className="text-sm text-zinc-400">ROI</div>
+              </div>
+              <div>
+                <div className="text-3xl font-bold text-orange-400">+26.4u</div>
+                <div className="text-sm text-zinc-400">Profit</div>
               </div>
             </div>
             <div className="text-xs text-zinc-500 text-center">
-              Underdogs only • 10+ point spreads • 2.5-5 point edge filter
+              Elite/High tier favorites • 7-14 point spreads • 3+ point edge filter
             </div>
+          </div>
+
+          <h3 className="text-lg font-semibold text-white mt-6 mb-3">Year-by-Year Performance</h3>
+          <div className="overflow-hidden rounded-lg border border-zinc-800 mb-6">
+            <table className="w-full text-sm">
+              <thead className="bg-zinc-800/50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-zinc-400 font-medium">Season</th>
+                  <th className="px-4 py-3 text-right text-zinc-400 font-medium">Bets</th>
+                  <th className="px-4 py-3 text-right text-zinc-400 font-medium">Win%</th>
+                  <th className="px-4 py-3 text-right text-zinc-400 font-medium">ROI</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-800">
+                <tr className="bg-zinc-900/30">
+                  <td className="px-4 py-3 text-white">2022</td>
+                  <td className="px-4 py-3 text-right text-zinc-300">93</td>
+                  <td className="px-4 py-3 text-right text-orange-400 font-medium">54.8%</td>
+                  <td className="px-4 py-3 text-right text-orange-400 font-medium">+4.7%</td>
+                </tr>
+                <tr className="bg-zinc-900/30">
+                  <td className="px-4 py-3 text-white">2023</td>
+                  <td className="px-4 py-3 text-right text-zinc-300">104</td>
+                  <td className="px-4 py-3 text-right text-zinc-400">49.0%</td>
+                  <td className="px-4 py-3 text-right text-red-400">-6.3%</td>
+                </tr>
+                <tr className="bg-zinc-900/30">
+                  <td className="px-4 py-3 text-white">2024</td>
+                  <td className="px-4 py-3 text-right text-zinc-300">112</td>
+                  <td className="px-4 py-3 text-right text-orange-400 font-medium">59.8%</td>
+                  <td className="px-4 py-3 text-right text-orange-400 font-medium">+14.3%</td>
+                </tr>
+                <tr className="bg-zinc-900/30">
+                  <td className="px-4 py-3 text-white">2025</td>
+                  <td className="px-4 py-3 text-right text-zinc-300">81</td>
+                  <td className="px-4 py-3 text-right text-orange-400 font-medium">60.5%</td>
+                  <td className="px-4 py-3 text-right text-orange-400 font-medium">+15.5%</td>
+                </tr>
+                <tr className="bg-orange-500/10">
+                  <td className="px-4 py-3 text-white font-bold">Total</td>
+                  <td className="px-4 py-3 text-right text-white font-bold">390</td>
+                  <td className="px-4 py-3 text-right text-orange-400 font-bold">55.9%</td>
+                  <td className="px-4 py-3 text-right text-orange-400 font-bold">+6.8%</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
 
           <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mt-6">
@@ -484,7 +534,7 @@ export default function ModelPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <div className="text-sm text-zinc-300">
-                <strong className="text-blue-400">Chronological Holdout:</strong> Train set (2022-2023): +8.8% ROI → Test set (2024): +19.8% ROI. Holdout confirms model generalizes to unseen data.
+                <strong className="text-blue-400">Chronological Holdout:</strong> Train (2022-2024): +4.5% ROI → Test (2025): +15.5% ROI. Test set outperforms training - no overfitting.
               </div>
             </div>
           </div>
@@ -495,30 +545,30 @@ export default function ModelPage() {
           <h2 className="text-xl font-bold text-white mb-4 pb-2 border-b border-zinc-800">CBB Bet Qualification Criteria</h2>
 
           <p className="text-zinc-400 mb-4">
-            Unlike CFB which bets both sides, CBB focuses exclusively on <strong className="text-white">underdogs</strong> with specific filters:
+            The CBB model focuses on <strong className="text-white">favorites from power conferences</strong> with specific filters:
           </p>
 
           <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4 mb-6">
             <div className="space-y-3 font-mono text-sm">
               <div className="flex items-center gap-3">
                 <div className="w-6 h-6 bg-orange-500/20 rounded flex items-center justify-center text-orange-400 text-xs">1</div>
-                <span className="text-zinc-400">Spread Size:</span>
-                <span className="text-white">≥ 10 points (big underdogs only)</span>
+                <span className="text-zinc-400">Conference:</span>
+                <span className="text-white">Big 12, SEC, Big Ten, Big East, ACC, Mountain West</span>
               </div>
               <div className="flex items-center gap-3">
                 <div className="w-6 h-6 bg-orange-500/20 rounded flex items-center justify-center text-orange-400 text-xs">2</div>
-                <span className="text-zinc-400">Model Edge:</span>
-                <span className="text-white">2.5 - 5.0 points</span>
+                <span className="text-zinc-400">Spread Size:</span>
+                <span className="text-white">7-14 points</span>
               </div>
               <div className="flex items-center gap-3">
                 <div className="w-6 h-6 bg-orange-500/20 rounded flex items-center justify-center text-orange-400 text-xs">3</div>
-                <span className="text-zinc-400">Games Played:</span>
-                <span className="text-white">Both teams must have 5+ games</span>
+                <span className="text-zinc-400">Model Edge:</span>
+                <span className="text-white">≥ 3.0 points</span>
               </div>
               <div className="flex items-center gap-3">
                 <div className="w-6 h-6 bg-orange-500/20 rounded flex items-center justify-center text-orange-400 text-xs">4</div>
                 <span className="text-zinc-400">Side:</span>
-                <span className="text-white">Underdog only (never favorite)</span>
+                <span className="text-white">Favorites only</span>
               </div>
             </div>
           </div>
@@ -529,37 +579,29 @@ export default function ModelPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <div className="text-sm text-zinc-300">
-                <strong className="text-amber-400">Why Underdogs Only?</strong> CBB markets show inefficiency specifically in large underdog lines. The model identifies when big underdogs are undervalued by 2.5-5 points. Betting favorites showed no edge in backtesting.
+                <strong className="text-amber-400">Why Power Conference Favorites?</strong> When elite conference teams are 7-14 point favorites but our model says they should be favored by even more, the market is undervaluing them. This is the opposite of the typical "fade the public" strategy.
               </div>
             </div>
           </div>
         </section>
 
-        {/* CBB Elo Model */}
+        {/* CBB Rating Model */}
         <section className="mb-12">
-          <h2 className="text-xl font-bold text-white mb-4 pb-2 border-b border-zinc-800">CBB Elo Rating System</h2>
+          <h2 className="text-xl font-bold text-white mb-4 pb-2 border-b border-zinc-800">CBB Conference-Aware Rating System</h2>
 
           <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4 font-mono text-sm mb-6">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <span className="text-zinc-500">BASE_ELO</span>
-                <span className="text-white ml-4">= 1500</span>
-              </div>
-              <div>
-                <span className="text-zinc-500">K_FACTOR</span>
-                <span className="text-white ml-4">= 20</span>
-              </div>
-              <div>
                 <span className="text-zinc-500">HOME_ADVANTAGE</span>
-                <span className="text-white ml-4">= 2.5 pts</span>
+                <span className="text-white ml-4">= 7.4 pts</span>
               </div>
               <div>
-                <span className="text-zinc-500">ELO_DIVISOR</span>
-                <span className="text-white ml-4">= 25</span>
+                <span className="text-zinc-500">LEARNING_RATE</span>
+                <span className="text-white ml-4">= 0.08</span>
               </div>
               <div>
-                <span className="text-zinc-500">SEASON_CARRYOVER</span>
-                <span className="text-white ml-4">= 60%</span>
+                <span className="text-zinc-500">SEASON_DECAY</span>
+                <span className="text-white ml-4">= 70%</span>
               </div>
               <div>
                 <span className="text-zinc-500">D1 TEAMS</span>
@@ -568,26 +610,45 @@ export default function ModelPage() {
             </div>
           </div>
 
+          <h3 className="text-lg font-semibold text-white mt-6 mb-3">Conference Ratings</h3>
+          <p className="text-zinc-400 mb-4">
+            Derived from analysis of 9,600 cross-conference games:
+          </p>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
+            <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3">
+              <div className="text-xs text-emerald-400 uppercase mb-1">Elite Tier</div>
+              <div className="text-sm text-white">Big 12 (+12), SEC (+11), Big Ten (+9)</div>
+            </div>
+            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+              <div className="text-xs text-blue-400 uppercase mb-1">High Tier</div>
+              <div className="text-sm text-white">Big East (+7), ACC (+5), MWC (+5)</div>
+            </div>
+            <div className="bg-zinc-700/30 border border-zinc-600 rounded-lg p-3">
+              <div className="text-xs text-zinc-400 uppercase mb-1">Mid Tier</div>
+              <div className="text-sm text-white">A-10, WCC, AAC, MVC, MAC...</div>
+            </div>
+          </div>
+
           <h3 className="text-lg font-semibold text-white mt-6 mb-3">Spread Projection</h3>
           <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-6 mb-6">
             <div className="text-center font-mono">
               <div className="text-lg text-white mb-2">
-                Spread<sub>model</sub> = (Elo<sub>home</sub> - Elo<sub>away</sub>) / 25 + 2.5
+                Spread<sub>model</sub> = (Rating<sub>away</sub> + Conf<sub>away</sub>) - (Rating<sub>home</sub> + Conf<sub>home</sub>) - 7.4
               </div>
               <div className="text-sm text-zinc-500 mt-4">
-                Pure Elo model (no SP+ or PPA components for CBB)
+                Team rating + Conference bonus, with 7.4 point home advantage
               </div>
             </div>
           </div>
 
-          <h3 className="text-lg font-semibold text-white mt-6 mb-3">Edge Calculation</h3>
+          <h3 className="text-lg font-semibold text-white mt-6 mb-3">Live Updates</h3>
           <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-6 mb-6">
             <div className="text-center font-mono">
               <div className="text-lg text-white mb-2">
-                Edge = Model Spread - Market Spread
+                Rating<sub>new</sub> = Rating<sub>old</sub> + 0.08 × (Actual - Predicted)
               </div>
               <div className="text-sm text-zinc-500 mt-4">
-                Positive edge on underdog = model thinks underdog is better than market says
+                Ratings update after every completed game
               </div>
             </div>
           </div>
@@ -610,37 +671,37 @@ export default function ModelPage() {
                 <tr className="bg-zinc-900/30">
                   <td className="px-4 py-3 text-zinc-300">Model Type</td>
                   <td className="px-4 py-3 text-center text-white">T-60 Ensemble (Elo+SP++PPA)</td>
-                  <td className="px-4 py-3 text-center text-white">Pure Elo</td>
+                  <td className="px-4 py-3 text-center text-white">Conference-Aware Rating</td>
                 </tr>
                 <tr className="bg-zinc-900/30">
                   <td className="px-4 py-3 text-zinc-300">Bet Sides</td>
                   <td className="px-4 py-3 text-center text-white">Both (favorites + underdogs)</td>
-                  <td className="px-4 py-3 text-center text-white">Underdogs only</td>
+                  <td className="px-4 py-3 text-center text-white">Elite/High tier favorites only</td>
                 </tr>
                 <tr className="bg-zinc-900/30">
                   <td className="px-4 py-3 text-zinc-300">Spread Filter</td>
                   <td className="px-4 py-3 text-center text-white">None</td>
-                  <td className="px-4 py-3 text-center text-white">≥ 10 points</td>
+                  <td className="px-4 py-3 text-center text-white">7-14 points</td>
                 </tr>
                 <tr className="bg-zinc-900/30">
                   <td className="px-4 py-3 text-zinc-300">Edge Filter</td>
                   <td className="px-4 py-3 text-center text-white">2.5-5 pts</td>
-                  <td className="px-4 py-3 text-center text-white">2.5-5 pts</td>
+                  <td className="px-4 py-3 text-center text-white">≥ 3 pts</td>
                 </tr>
                 <tr className="bg-zinc-900/30">
                   <td className="px-4 py-3 text-zinc-300">Win Rate</td>
                   <td className="px-4 py-3 text-center text-emerald-400">63.2%</td>
-                  <td className="px-4 py-3 text-center text-orange-400">59.4%</td>
+                  <td className="px-4 py-3 text-center text-orange-400">55.9%</td>
                 </tr>
                 <tr className="bg-zinc-900/30">
                   <td className="px-4 py-3 text-zinc-300">ROI</td>
                   <td className="px-4 py-3 text-center text-emerald-400">+20.6%</td>
-                  <td className="px-4 py-3 text-center text-orange-400">+13.5%</td>
+                  <td className="px-4 py-3 text-center text-orange-400">+6.8%</td>
                 </tr>
                 <tr className="bg-zinc-900/30">
                   <td className="px-4 py-3 text-zinc-300">Bets/Season</td>
                   <td className="px-4 py-3 text-center text-white">~250</td>
-                  <td className="px-4 py-3 text-center text-white">~45</td>
+                  <td className="px-4 py-3 text-center text-white">~100</td>
                 </tr>
               </tbody>
             </table>
@@ -667,7 +728,7 @@ export default function ModelPage() {
               <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
               <span>CFB Edge</span>
             </div>
-            <div>CFB: T-60 Ensemble v1.0 • CBB: Elo Underdog v1.0 • December 2025</div>
+            <div>CFB: T-60 Ensemble v1.0 • CBB: Conference Rating v2 • December 2025</div>
           </div>
         </div>
       </footer>

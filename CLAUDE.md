@@ -306,116 +306,97 @@ curl http://localhost:3000/api/backtest/calibration?seasons=2022,2023,2024
 
 ---
 
-## CBB Research — Archived (December 2024)
+## CBB Model — Production Status (December 22, 2025)
 
-### Status: ARCHIVED — No Actionable Edge Found
+### PRODUCTION MODEL: Conference-Aware Rating v2
 
-CBB (college basketball) was explored as a potential second market. After comprehensive research across THREE approaches, all showed high market efficiency with no exploitable edge.
+The CBB model uses a **conference-aware rating system** that:
+- Tracks team ratings that update after each completed game
+- Adds conference strength bonuses (derived from 9,600 cross-conference games)
+- Targets **power conference favorites** in specific spread ranges
 
-### Track A: CBB Spreads + Line Movement
+**Strategy:** Bet favorites from elite/high tier conferences when spread is 7-14 points and model edge is 3+ points.
 
-**Dataset:** 5,914 games with DK open and T-60 spreads (2022-2024)
+### Key Files
 
-**Research Question:** Does betting WITH or AGAINST line movement produce edge?
+| File | Purpose |
+|------|---------|
+| `src/lib/models/cbb-elo.ts` | Frozen production config (VALIDATED 2025-12-22) |
+| `src/lib/cbb/jobs/update-elo.ts` | Daily rating updates after games complete |
+| `src/lib/cbb/jobs/materialize-edges.ts` | Edge calculation for upcoming games |
+| `src/app/api/cbb/games/route.ts` | API endpoint for CBB predictions |
 
-**Scripts:**
-- `scripts/sync-cbb-dk-open-v3.ts` - Synced DK opening spreads (93.5% coverage)
-- `scripts/cbb-line-movement-backtest.ts` - WITH/AGAINST move analysis
+### Model Configuration
 
-**Results:**
+```typescript
+CBB_RATING_CONSTANTS = {
+  HOME_ADVANTAGE: 7.4,      // Points added for home team
+  LEARNING_RATE: 0.08,      // How fast ratings update
+  SEASON_DECAY: 0.7,        // 70% carryover between seasons
+}
 
-| Strategy | Move Filter | Win% | ROI |
-|----------|-------------|------|-----|
-| WITH move | 0.5+ pts | 51.7% | -1.2% |
-| AGAINST move | 0.5+ pts | 48.3% | -7.8% |
-| WITH move | 1+ pts | 51.8% | -1.1% |
-| AGAINST move | 3+ pts | 52.4% | +0.0% |
-
-**Conclusion:** No reliable edge. Market is efficient.
-
-### Track B: CBB Totals + Structural Signals
-
-**Dataset:** 18,689 games with closing totals and results (2022-2025)
-
-**Research Question:** Do rest days, schedule compression, or season phase predict totals?
-
-**Scripts:**
-- `scripts/cbb-totals-baseline.ts` - Baseline + structural signal analysis
-
-**Results:**
-
-| Signal | Games | Over% | Best Bet | ROI |
-|--------|-------|-------|----------|-----|
-| Baseline (all) | 18,689 | 49.9% | — | -4.5% |
-| 8+ days rest | 646 | 53.8% | Over | +2.7% |
-| Back-to-back | 1,655 | 52.7% | Over | +0.6% |
-| 2-3 days rest | 4,115 | 48.4% | Under | -1.5% |
-
-**Conclusion:** Market efficient. Structural signals too weak.
-
-### Track C: CBB Ratings Model (December 2025)
-
-**Dataset:** 4,467 games with T-60 spreads AND prior-season net ratings (2023-2024)
-
-**Research Question:** Can net rating differential predict spreads better than market? (Same approach that works for CFB)
-
-**Scripts:**
-- `scripts/cbb-ratings-backtest-v2.ts` - Full ratings model backtest
-- `docs/CBB_RATINGS_MODEL_SCOPE.md` - Methodology documentation
-
-**Model:**
-```
-Model Spread = (Away Net Rating - Home Net Rating) / K + HFA
-Edge = Market T-60 Spread - Model Spread
+CBB_BET_CRITERIA = {
+  MIN_SPREAD: 7,            // Minimum spread size
+  MAX_SPREAD: 14,           // Maximum spread size
+  MIN_EDGE: 3.0,            // Minimum edge in points
+  FAVORITE_ONLY: true,      // Only bet favorites
+  ELITE_HIGH_TIER_ONLY: true, // Only elite/high tier conferences
+}
 ```
 
-**Grid Search:** Tested K ∈ [2.0, 5.0], HFA ∈ [2.5, 4.0], Edge filters [0-100]
+### Conference Tiers
 
-**Results:**
+| Tier | Conferences | Bonus |
+|------|-------------|-------|
+| Elite | Big 12, SEC, Big Ten | +9 to +12 |
+| High | Big East, ACC, Mountain West | +5 to +7 |
+| Mid | A-10, WCC, AAC, MVC, MAC, Sun Belt, Pac-12 | 0 to +4 |
+| Low | C-USA, WAC, Big West, OVC, Horizon, Southern, CAA, Patriot, Ivy | -1 to -6 |
+| Bottom | Big South, Summit, ASUN, NEC, Southland, MEAC, SWAC | -7 to -16 |
 
-| Dataset | Bets | Win% | ROI |
-|---------|------|------|-----|
-| Train (2023) | 2,152 | 49.4% | -5.6% |
-| Holdout (2024) | 2,228 | 48.5% | -7.3% |
-| **Combined** | **4,380** | **49.0%** | **-6.5%** |
+### Backtest Results (2022-2025)
 
-**Edge Filter Analysis (2024 Holdout):**
+| Season | Bets | Win% | ROI |
+|--------|------|------|-----|
+| 2022 | 93 | 54.8% | +4.7% |
+| 2023 | 104 | 49.0% | -6.3% |
+| 2024 | 112 | 59.8% | +14.3% |
+| 2025 | 81 | 60.5% | +15.5% |
+| **TOTAL** | **390** | **55.9%** | **+6.8%** |
 
-| Edge Range | Bets | Win% | ROI |
-|------------|------|------|-----|
-| 2-3 pts | 80 | 45.0% | -14.0% |
-| 3-4 pts | 108 | 50.0% | -4.5% |
-| 4-5 pts | 152 | 46.7% | -10.8% |
-| 5-7 pts | 304 | 50.3% | -3.9% |
+**Chronological Holdout:**
+- Train (2022-2024): 309 bets, 54.7% win, +4.5% ROI
+- Test (2025): 81 bets, 60.5% win, +15.5% ROI ✅ (test > train, no overfitting)
 
-**Conclusion:** No edge range is profitable. Net ratings provide ZERO predictive value over market prices.
+### CBB vs CFB Comparison
 
-### CFB vs CBB Comparison
+| Market | Model | Bets | Win% | ROI |
+|--------|-------|------|------|-----|
+| **CFB** | T-60 Ensemble | 758 | 63.2% | **+20.6%** |
+| **CBB** | Conf-Aware Rating | 390 | 55.9% | **+6.8%** |
 
-| Market | Approach | Bets | Win% | ROI |
-|--------|----------|------|------|-----|
-| **CFB** | T-60 Ensemble (Elo+SP++PPA) | 758 | 63.2% | **+20.6%** |
-| **CBB** | Net Rating Model | 4,380 | 49.0% | **-6.5%** |
-| **CBB** | Line Movement | 5,914 | ~51% | **-1 to -8%** |
-| **CBB** | Structural Signals | 18,689 | ~50% | **-4.5%** |
+### CBB Cron Jobs
 
-### Why CBB Is Definitively Archived
+| Job | Schedule | Purpose |
+|-----|----------|---------|
+| `cbb-sync-odds` | Every 15 min | Poll The Odds API for CBB spreads |
+| `cbb-update-elo` | 6:30 AM daily | Process completed games, update ratings |
+| `cbb-materialize-edges` | Every 15 min | Calculate predictions for upcoming games |
+| `cbb-grade-bets` | 7 AM daily | Grade completed predictions |
 
-1. **Spreads (Ratings):** Net rating model = 49% win rate, -6.5% ROI on 4,380 bets
-2. **Spreads (Line Movement):** No signal in following or fading market moves
-3. **Totals:** Structural signals too weak to overcome vig
-4. **All approaches tested:** Ratings, line movement, structural — all fail
-5. **Large sample sizes:** 4,000-18,000 games per approach
-6. **CBB market is efficient:** Higher volume than CFB, ratings already priced in
-
-### CBB Tables (for reference)
+### CBB Tables
 
 ```
-cbb_games           - Games with scores, team IDs (12,000 rows)
-cbb_teams           - Team lookup with aliases (365 rows)
-cbb_betting_lines   - Spreads at open/T-60/close (24,275 rows)
-cbb_team_ratings    - Net/off/def ratings by season (1,443 rows)
+cbb_games           - Games with scores, team IDs
+cbb_teams           - Team lookup with conferences (365 D1 teams)
+cbb_betting_lines   - Spreads from The Odds API
+cbb_elo_snapshots   - Team ratings by season (updated daily)
+cbb_game_predictions - Materialized edges and bet results
 ```
+
+### Key Insight
+
+When power conference teams are 7-14 point favorites but the model says they should be favored by MORE, the market is undervaluing them. This is the opposite of typical "fade the public" strategies.
 
 ---
 

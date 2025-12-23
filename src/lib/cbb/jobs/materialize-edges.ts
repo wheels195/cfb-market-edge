@@ -1,15 +1,19 @@
 /**
- * CBB Materialize Edges Job
+ * CBB Materialize Edges Job (Conference-Aware Model v2)
  *
- * Calculates predictions for all upcoming games using Elo model
- * Identifies which games qualify for bets (underdog + 10+ spread + 2.5-5 edge)
+ * Calculates predictions for all upcoming games using the conference-aware rating model.
+ * Identifies which games qualify for bets using the validated strategy:
+ * - Elite/High tier conference favorites
+ * - 7-14 point spread
+ * - 3+ point edge
  */
 
 import { supabase } from '@/lib/db/client';
 import {
-  CbbEloSystem,
+  CbbRatingSystem,
   analyzeCbbBet,
   CBB_BET_CRITERIA,
+  CBB_RATING_CONSTANTS,
 } from '@/lib/models/cbb-elo';
 
 export interface CbbMaterializeEdgesResult {
@@ -33,10 +37,36 @@ function getCurrentSeason(): number {
 }
 
 /**
- * Load Elo ratings from database
+ * Load team conferences from database
  */
-async function loadEloRatings(
-  elo: CbbEloSystem,
+async function loadTeamConferences(
+  ratingSystem: CbbRatingSystem
+): Promise<Map<string, string>> {
+  const { data, error } = await supabase
+    .from('cbb_teams')
+    .select('id, conference');
+
+  if (error) {
+    console.error('Error loading team conferences:', error);
+    return new Map();
+  }
+
+  const confMap = new Map<string, string>();
+  for (const team of data || []) {
+    if (team.conference) {
+      ratingSystem.setTeamConference(team.id, team.conference);
+      confMap.set(team.id, team.conference);
+    }
+  }
+
+  return confMap;
+}
+
+/**
+ * Load ratings from database
+ */
+async function loadRatings(
+  ratingSystem: CbbRatingSystem,
   season: number
 ): Promise<number> {
   const { data, error } = await supabase
@@ -45,12 +75,13 @@ async function loadEloRatings(
     .eq('season', season);
 
   if (error) {
-    console.error('Error loading Elo:', error);
+    console.error('Error loading ratings:', error);
     return 0;
   }
 
   for (const row of data || []) {
-    elo.setElo(row.team_id, row.elo, row.games_played);
+    // DB column is 'elo' but stores the team rating value
+    ratingSystem.setRating(row.team_id, row.elo, row.games_played);
   }
 
   return data?.length || 0;
@@ -132,6 +163,11 @@ async function getUpcomingGamesWithOdds(): Promise<Array<{
 
 /**
  * Materialize edges for upcoming CBB games
+ *
+ * Uses the validated conference-aware model:
+ * - Elite/High tier conference favorites (Big 12, SEC, Big Ten, Big East, ACC, MWC)
+ * - 7-14 point spread
+ * - 3+ point edge
  */
 export async function materializeCbbEdges(): Promise<CbbMaterializeEdgesResult> {
   const result: CbbMaterializeEdgesResult = {
@@ -144,14 +180,21 @@ export async function materializeCbbEdges(): Promise<CbbMaterializeEdgesResult> 
   try {
     const season = getCurrentSeason();
     console.log(`Materializing CBB edges for season ${season}`);
+    console.log(`Using: HOME_ADV=${CBB_RATING_CONSTANTS.HOME_ADVANTAGE}, MIN_EDGE=${CBB_BET_CRITERIA.MIN_EDGE}, SPREAD=${CBB_BET_CRITERIA.MIN_SPREAD}-${CBB_BET_CRITERIA.MAX_SPREAD}`);
 
-    // Load Elo ratings
-    const elo = new CbbEloSystem();
-    const ratingCount = await loadEloRatings(elo, season);
-    console.log(`Loaded ${ratingCount} Elo ratings`);
+    // Initialize rating system
+    const ratingSystem = new CbbRatingSystem();
+
+    // Load team conferences
+    const confMap = await loadTeamConferences(ratingSystem);
+    console.log(`Loaded ${confMap.size} team conferences`);
+
+    // Load ratings
+    const ratingCount = await loadRatings(ratingSystem, season);
+    console.log(`Loaded ${ratingCount} team ratings`);
 
     if (ratingCount === 0) {
-      result.errors.push('No Elo ratings loaded - run seed-cbb-elo first');
+      result.errors.push('No ratings loaded - run cbb-update-elo first');
       return result;
     }
 
@@ -161,22 +204,26 @@ export async function materializeCbbEdges(): Promise<CbbMaterializeEdgesResult> 
 
     for (const game of games) {
       try {
-        // Get Elo ratings
-        const homeElo = elo.getElo(game.home_team_id);
-        const awayElo = elo.getElo(game.away_team_id);
-        const homeGames = elo.getGamesPlayed(game.home_team_id);
-        const awayGames = elo.getGamesPlayed(game.away_team_id);
+        // Get team data
+        const homeRating = ratingSystem.getTeamRating(game.home_team_id);
+        const awayRating = ratingSystem.getTeamRating(game.away_team_id);
+        const homeTotalRating = ratingSystem.getTotalRating(game.home_team_id);
+        const awayTotalRating = ratingSystem.getTotalRating(game.away_team_id);
+        const homeGames = ratingSystem.getGamesPlayed(game.home_team_id);
+        const awayGames = ratingSystem.getGamesPlayed(game.away_team_id);
+        const homeConf = confMap.get(game.home_team_id) || null;
+        const awayConf = confMap.get(game.away_team_id) || null;
 
-        // Calculate model spread
-        const modelSpread = elo.getSpread(game.home_team_id, game.away_team_id);
+        // Calculate model spread (from home perspective, negative = home favored)
+        const modelSpread = ratingSystem.getSpread(game.home_team_id, game.away_team_id);
         const marketSpread = game.spread_home;
 
-        // Analyze bet
+        // Analyze bet using new conference-aware criteria
         const analysis = analyzeCbbBet(
           marketSpread,
           modelSpread,
-          homeGames,
-          awayGames
+          homeConf,
+          awayConf
         );
 
         // Build prediction record
@@ -185,15 +232,17 @@ export async function materializeCbbEdges(): Promise<CbbMaterializeEdgesResult> 
           model_spread_home: modelSpread,
           market_spread_home: marketSpread,
           edge_points: analysis.absEdge,
-          predicted_side: analysis.side || (analysis.edge > 0 ? 'home' : 'away'),
-          home_elo: homeElo,
-          away_elo: awayElo,
+          predicted_side: analysis.side,
+          home_elo: homeTotalRating, // Store total rating (team + conf) for display
+          away_elo: awayTotalRating,
           home_games_played: homeGames,
           away_games_played: awayGames,
           spread_size: analysis.spreadSize,
           is_underdog_bet: analysis.isUnderdog,
           qualifies_for_bet: analysis.qualifies,
-          qualification_reason: analysis.qualificationReason || analysis.reason,
+          qualification_reason: analysis.qualifies ? analysis.qualificationReason : analysis.reason,
+          bet_team_conference: analysis.betTeamConference,
+          bet_team_tier: analysis.betTeamTier,
           predicted_at: new Date().toISOString(),
         };
 
@@ -210,6 +259,7 @@ export async function materializeCbbEdges(): Promise<CbbMaterializeEdgesResult> 
           result.predictionsWritten++;
           if (analysis.qualifies) {
             result.qualifyingBets++;
+            console.log(`  BET: ${game.away_team_name} @ ${game.home_team_name} - ${analysis.side.toUpperCase()} ${analysis.qualificationReason}`);
           }
         }
 
@@ -271,7 +321,7 @@ export async function getCbbPredictions(): Promise<Array<{
         home_score
       )
     `)
-    .is('cbb_games.home_score', null) // Only upcoming
+    .eq('cbb_games.home_score', 0) // CBBD uses 0 for upcoming
     .gte('cbb_games.start_date', now.toISOString())
     .order('cbb_games.start_date', { ascending: true });
 

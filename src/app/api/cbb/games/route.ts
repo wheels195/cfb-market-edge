@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/db/client';
-import { CbbEloSystem, analyzeCbbBet } from '@/lib/models/cbb-elo';
+import { CbbRatingSystem, analyzeCbbBet } from '@/lib/models/cbb-elo';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,13 +11,15 @@ interface CbbGame {
   home_team: {
     id: string;
     name: string;
-    elo: number;
+    conference: string | null;
+    rating: number;
     games_played: number;
   };
   away_team: {
     id: string;
     name: string;
-    elo: number;
+    conference: string | null;
+    rating: number;
     games_played: number;
   };
   market_spread: number | null;
@@ -56,15 +58,27 @@ export async function GET(request: Request) {
     const season = getCurrentSeason();
     const now = new Date();
 
-    // Load Elo ratings
-    const { data: eloData } = await supabase
+    // Load team conferences
+    const { data: teamsData } = await supabase
+      .from('cbb_teams')
+      .select('id, conference');
+
+    const confMap = new Map<string, string>();
+    for (const team of teamsData || []) {
+      if (team.conference) {
+        confMap.set(team.id, team.conference);
+      }
+    }
+
+    // Load ratings (DB column is 'elo' but stores team rating)
+    const { data: ratingData } = await supabase
       .from('cbb_elo_snapshots')
       .select('team_id, elo, games_played')
       .eq('season', season);
 
-    const eloMap = new Map<string, { elo: number; games: number }>();
-    for (const row of eloData || []) {
-      eloMap.set(row.team_id, { elo: row.elo, games: row.games_played });
+    const ratingMap = new Map<string, { rating: number; games: number }>();
+    for (const row of ratingData || []) {
+      ratingMap.set(row.team_id, { rating: row.elo, games: row.games_played });
     }
 
     // Build query based on filter (D1 only - both team IDs must exist)
@@ -134,10 +148,13 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Transform games
-    const elo = new CbbEloSystem();
-    for (const [teamId, data] of eloMap) {
-      elo.setElo(teamId, data.elo, data.games);
+    // Initialize rating system
+    const ratingSystem = new CbbRatingSystem();
+    for (const [teamId, conf] of confMap) {
+      ratingSystem.setTeamConference(teamId, conf);
+    }
+    for (const [teamId, data] of ratingMap) {
+      ratingSystem.setRating(teamId, data.rating, data.games);
     }
 
     const result: CbbGame[] = (games || []).map((game: any) => {
@@ -147,8 +164,10 @@ export async function GET(request: Request) {
       const lineRaw = game.cbb_betting_lines;
       const bettingLine = Array.isArray(lineRaw) ? lineRaw[0] : lineRaw;
 
-      const homeEloData = eloMap.get(game.home_team_id) || { elo: 1500, games: 0 };
-      const awayEloData = eloMap.get(game.away_team_id) || { elo: 1500, games: 0 };
+      const homeRatingData = ratingMap.get(game.home_team_id) || { rating: 0, games: 0 };
+      const awayRatingData = ratingMap.get(game.away_team_id) || { rating: 0, games: 0 };
+      const homeConf = confMap.get(game.home_team_id) || null;
+      const awayConf = confMap.get(game.away_team_id) || null;
 
       // Determine status - CBBD uses 0-0 for upcoming, not null
       let status: 'upcoming' | 'in_progress' | 'completed' = 'upcoming';
@@ -159,8 +178,8 @@ export async function GET(request: Request) {
         status = 'in_progress';
       }
 
-      // Calculate model spread from Elo
-      const modelSpread = elo.getSpread(game.home_team_id, game.away_team_id);
+      // Calculate model spread from rating system
+      const modelSpread = ratingSystem.getSpread(game.home_team_id, game.away_team_id);
 
       // Get market spread from betting lines or predictions
       const marketSpread = bettingLine?.spread_home ?? prediction?.market_spread_home ?? null;
@@ -171,7 +190,7 @@ export async function GET(request: Request) {
         isUnderdog: boolean;
         absEdge: number;
         spreadSize: number;
-        side: 'home' | 'away' | null;
+        side: 'home' | 'away';
         qualificationReason: string | null;
         reason: string | null;
       } = {
@@ -179,7 +198,7 @@ export async function GET(request: Request) {
         isUnderdog: false,
         absEdge: 0,
         spreadSize: 0,
-        side: null,
+        side: 'home',
         qualificationReason: null,
         reason: null,
       };
@@ -188,15 +207,23 @@ export async function GET(request: Request) {
         const betAnalysis = analyzeCbbBet(
           marketSpread,
           modelSpread,
-          homeEloData.games,
-          awayEloData.games
+          homeConf,
+          awayConf
         );
         analysis = {
-          ...betAnalysis,
+          qualifies: betAnalysis.qualifies,
+          isUnderdog: betAnalysis.isUnderdog,
+          absEdge: betAnalysis.absEdge,
+          spreadSize: betAnalysis.spreadSize,
+          side: betAnalysis.side,
           qualificationReason: betAnalysis.qualificationReason,
           reason: betAnalysis.reason,
         };
       }
+
+      // Get total rating (team + conference) for display
+      const homeTotalRating = ratingSystem.getTotalRating(game.home_team_id);
+      const awayTotalRating = ratingSystem.getTotalRating(game.away_team_id);
 
       return {
         id: game.id,
@@ -205,20 +232,22 @@ export async function GET(request: Request) {
         home_team: {
           id: game.home_team_id,
           name: game.home_team_name,
-          elo: homeEloData.elo,
-          games_played: homeEloData.games,
+          conference: homeConf,
+          rating: homeTotalRating,
+          games_played: homeRatingData.games,
         },
         away_team: {
           id: game.away_team_id,
           name: game.away_team_name,
-          elo: awayEloData.elo,
-          games_played: awayEloData.games,
+          conference: awayConf,
+          rating: awayTotalRating,
+          games_played: awayRatingData.games,
         },
         market_spread: marketSpread,
         model_spread: modelSpread,
         edge_points: analysis.absEdge,
         spread_size: analysis.spreadSize,
-        recommended_side: analysis.side,
+        recommended_side: analysis.qualifies ? analysis.side : null,
         is_underdog_bet: analysis.isUnderdog,
         qualifies_for_bet: prediction?.qualifies_for_bet || analysis.qualifies,
         qualification_reason: prediction?.qualification_reason || analysis.qualificationReason || analysis.reason,
