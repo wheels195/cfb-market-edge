@@ -241,8 +241,6 @@ export async function materializeCbbEdges(): Promise<CbbMaterializeEdgesResult> 
           is_underdog_bet: analysis.isUnderdog,
           qualifies_for_bet: analysis.qualifies,
           qualification_reason: analysis.qualifies ? analysis.qualificationReason : analysis.reason,
-          bet_team_conference: analysis.betTeamConference,
-          bet_team_tier: analysis.betTeamTier,
           predicted_at: new Date().toISOString(),
         };
 
