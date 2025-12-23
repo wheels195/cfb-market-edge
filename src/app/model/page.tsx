@@ -444,13 +444,13 @@ export default function ModelPage() {
         <section className="mb-12">
           <div className="inline-flex items-center gap-2 px-3 py-1 bg-orange-500/10 border border-orange-500/20 rounded-full mb-6">
             <div className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-pulse" />
-            <span className="text-xs font-medium text-orange-400 uppercase tracking-wider">CBB Conference Rating Model v2</span>
+            <span className="text-xs font-medium text-orange-400 uppercase tracking-wider">CBB Conference Rating Model v2.1 - Dual Strategy</span>
           </div>
           <h2 className="text-3xl font-bold text-white tracking-tight mb-4">
-            Power Conference Favorite Strategy
+            Dual Strategy: Favorites + Underdogs
           </h2>
           <p className="text-lg text-zinc-400 max-w-2xl">
-            Conference-aware rating model for college basketball spreads. Targets favorites from elite/high tier conferences (Big 12, SEC, Big Ten, Big East, ACC, Mountain West) when model shows 3+ point edge.
+            Conference-aware rating model running two simultaneous strategies. High-volume favorites play (+4% ROI) combined with low-volume, high-ROI underdog plays (+48.7% ROI).
           </p>
         </section>
 
@@ -458,71 +458,107 @@ export default function ModelPage() {
         <section className="mb-12">
           <h2 className="text-xl font-bold text-white mb-4 pb-2 border-b border-zinc-800">CBB Backtest Results (2022-2025)</h2>
 
-          <div className="bg-gradient-to-br from-orange-950/30 to-zinc-900/50 border border-orange-500/20 rounded-xl p-6 mb-6">
-            <div className="grid grid-cols-4 gap-6 text-center mb-6">
-              <div>
-                <div className="text-3xl font-bold text-white">390</div>
-                <div className="text-sm text-zinc-400">Total Bets</div>
+          {/* Two Strategy Cards */}
+          <div className="grid md:grid-cols-2 gap-6 mb-6">
+            {/* Favorites Strategy */}
+            <div className="bg-gradient-to-br from-emerald-950/30 to-zinc-900/50 border border-emerald-500/20 rounded-xl p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <span className="px-2 py-1 rounded bg-emerald-500/20 text-emerald-400 text-xs font-bold">FAV</span>
+                <span className="text-white font-semibold">Favorites Strategy</span>
               </div>
-              <div>
-                <div className="text-3xl font-bold text-orange-400">55.9%</div>
-                <div className="text-sm text-zinc-400">Win Rate</div>
+              <div className="grid grid-cols-3 gap-4 text-center mb-4">
+                <div>
+                  <div className="text-2xl font-bold text-white">857</div>
+                  <div className="text-xs text-zinc-400">Bets</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-emerald-400">54.5%</div>
+                  <div className="text-xs text-zinc-400">Win Rate</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-emerald-400">+4.0%</div>
+                  <div className="text-xs text-zinc-400">ROI</div>
+                </div>
               </div>
-              <div>
-                <div className="text-3xl font-bold text-orange-400">+6.8%</div>
-                <div className="text-sm text-zinc-400">ROI</div>
-              </div>
-              <div>
-                <div className="text-3xl font-bold text-orange-400">+26.4u</div>
-                <div className="text-sm text-zinc-400">Profit</div>
-              </div>
+              <div className="text-xs text-zinc-500">High volume • Consistent returns</div>
             </div>
-            <div className="text-xs text-zinc-500 text-center">
-              Elite/High tier favorites • 7-14 point spreads • 3+ point edge filter
+
+            {/* Underdogs Strategy */}
+            <div className="bg-gradient-to-br from-amber-950/30 to-zinc-900/50 border border-amber-500/20 rounded-xl p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <span className="px-2 py-1 rounded bg-amber-500/20 text-amber-400 text-xs font-bold">DOG</span>
+                <span className="text-white font-semibold">Underdogs Strategy</span>
+              </div>
+              <div className="grid grid-cols-3 gap-4 text-center mb-4">
+                <div>
+                  <div className="text-2xl font-bold text-white">86</div>
+                  <div className="text-xs text-zinc-400">Bets</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-amber-400">77.9%</div>
+                  <div className="text-xs text-zinc-400">Win Rate</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-amber-400">+48.7%</div>
+                  <div className="text-xs text-zinc-400">ROI</div>
+                </div>
+              </div>
+              <div className="text-xs text-zinc-500">Low volume • Exceptional ROI</div>
             </div>
           </div>
 
-          <h3 className="text-lg font-semibold text-white mt-6 mb-3">Year-by-Year Performance</h3>
-          <div className="overflow-hidden rounded-lg border border-zinc-800 mb-6">
+          {/* Combined Stats */}
+          <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-4 mb-6">
+            <div className="flex items-center justify-between">
+              <span className="text-zinc-400 text-sm">Combined (Both Strategies)</span>
+              <div className="flex items-center gap-6 text-sm">
+                <span className="text-white"><strong>943</strong> total bets</span>
+                <span className="text-orange-400">~<strong>+8.1%</strong> weighted ROI</span>
+              </div>
+            </div>
+          </div>
+
+          <h3 className="text-lg font-semibold text-white mt-6 mb-3">Year-by-Year: Underdogs Strategy</h3>
+          <div className="overflow-hidden rounded-lg border border-amber-500/20 mb-6">
             <table className="w-full text-sm">
-              <thead className="bg-zinc-800/50">
+              <thead className="bg-amber-900/20">
                 <tr>
-                  <th className="px-4 py-3 text-left text-zinc-400 font-medium">Season</th>
-                  <th className="px-4 py-3 text-right text-zinc-400 font-medium">Bets</th>
-                  <th className="px-4 py-3 text-right text-zinc-400 font-medium">Win%</th>
-                  <th className="px-4 py-3 text-right text-zinc-400 font-medium">ROI</th>
+                  <th className="px-4 py-3 text-left text-amber-400 font-medium">Season</th>
+                  <th className="px-4 py-3 text-right text-amber-400 font-medium">Bets</th>
+                  <th className="px-4 py-3 text-right text-amber-400 font-medium">Win%</th>
+                  <th className="px-4 py-3 text-right text-amber-400 font-medium">ROI</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800">
                 <tr className="bg-zinc-900/30">
                   <td className="px-4 py-3 text-white">2022</td>
-                  <td className="px-4 py-3 text-right text-zinc-300">93</td>
-                  <td className="px-4 py-3 text-right text-orange-400 font-medium">54.8%</td>
-                  <td className="px-4 py-3 text-right text-orange-400 font-medium">+4.7%</td>
+                  <td className="px-4 py-3 text-right text-zinc-300">30</td>
+                  <td className="px-4 py-3 text-right text-amber-400 font-medium">70.0%</td>
+                  <td className="px-4 py-3 text-right text-amber-400 font-medium">+33.6%</td>
                 </tr>
                 <tr className="bg-zinc-900/30">
                   <td className="px-4 py-3 text-white">2023</td>
-                  <td className="px-4 py-3 text-right text-zinc-300">104</td>
-                  <td className="px-4 py-3 text-right text-zinc-400">49.0%</td>
-                  <td className="px-4 py-3 text-right text-red-400">-6.3%</td>
+                  <td className="px-4 py-3 text-right text-zinc-300">29</td>
+                  <td className="px-4 py-3 text-right text-amber-400 font-medium">79.3%</td>
+                  <td className="px-4 py-3 text-right text-amber-400 font-medium">+51.4%</td>
                 </tr>
                 <tr className="bg-zinc-900/30">
                   <td className="px-4 py-3 text-white">2024</td>
-                  <td className="px-4 py-3 text-right text-zinc-300">112</td>
-                  <td className="px-4 py-3 text-right text-orange-400 font-medium">59.8%</td>
-                  <td className="px-4 py-3 text-right text-orange-400 font-medium">+14.3%</td>
+                  <td className="px-4 py-3 text-right text-zinc-300">16</td>
+                  <td className="px-4 py-3 text-right text-amber-400 font-medium">87.5%</td>
+                  <td className="px-4 py-3 text-right text-amber-400 font-medium">+67.0%</td>
                 </tr>
                 <tr className="bg-zinc-900/30">
                   <td className="px-4 py-3 text-white">2025</td>
-                  <td className="px-4 py-3 text-right text-zinc-300">81</td>
-                  <td className="px-4 py-3 text-right text-orange-400 font-medium">60.5%</td>
-                  <td className="px-4 py-3 text-right text-orange-400 font-medium">+15.5%</td>
+                  <td className="px-4 py-3 text-right text-zinc-300">11</td>
+                  <td className="px-4 py-3 text-right text-amber-400 font-medium">81.8%</td>
+                  <td className="px-4 py-3 text-right text-amber-400 font-medium">+56.2%</td>
                 </tr>
-                <tr className="bg-orange-500/10">
+                <tr className="bg-amber-500/10">
                   <td className="px-4 py-3 text-white font-bold">Total</td>
-                  <td className="px-4 py-3 text-right text-white font-bold">390</td>
-                  <td className="px-4 py-3 text-right text-orange-400 font-bold">55.9%</td>
-                  <td className="px-4 py-3 text-right text-orange-400 font-bold">+6.8%</td>
+                  <td className="px-4 py-3 text-right text-white font-bold">86</td>
+                  <td className="px-4 py-3 text-right text-amber-400 font-bold">77.9%</td>
+                  <td className="px-4 py-3 text-right text-amber-400 font-bold">+48.7%</td>
                 </tr>
               </tbody>
             </table>
@@ -534,7 +570,7 @@ export default function ModelPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <div className="text-sm text-zinc-300">
-                <strong className="text-blue-400">Chronological Holdout:</strong> Train (2022-2024): +4.5% ROI → Test (2025): +15.5% ROI. Test set outperforms training - no overfitting.
+                <strong className="text-blue-400">Key Insight:</strong> The underdog strategy shows remarkably consistent profitability across all 4 seasons (no losing years). Every year has 70%+ win rate.
               </div>
             </div>
           </div>
@@ -545,31 +581,79 @@ export default function ModelPage() {
           <h2 className="text-xl font-bold text-white mb-4 pb-2 border-b border-zinc-800">CBB Bet Qualification Criteria</h2>
 
           <p className="text-zinc-400 mb-4">
-            The CBB model focuses on <strong className="text-white">favorites from power conferences</strong> with specific filters:
+            Two strategies run simultaneously with shared base criteria but opposite side selection:
           </p>
 
+          {/* Two columns for strategies */}
+          <div className="grid md:grid-cols-2 gap-6 mb-6">
+            {/* Favorites */}
+            <div className="bg-emerald-950/20 border border-emerald-500/30 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-4">
+                <span className="px-2 py-1 rounded bg-emerald-500/20 text-emerald-400 text-xs font-bold">FAV</span>
+                <span className="text-white font-semibold">Favorites Strategy</span>
+              </div>
+              <div className="space-y-2 font-mono text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="text-emerald-400">✓</span>
+                  <span className="text-zinc-400">Spread:</span>
+                  <span className="text-white">7-14 points</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-emerald-400">✓</span>
+                  <span className="text-zinc-400">Edge:</span>
+                  <span className="text-white">≥ 3.0 points</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-emerald-400">✓</span>
+                  <span className="text-zinc-400">Side:</span>
+                  <span className="text-white">Bet the favorite</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-emerald-400">✓</span>
+                  <span className="text-zinc-400">Filter:</span>
+                  <span className="text-white">Favorite must be Elite/High tier</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Underdogs */}
+            <div className="bg-amber-950/20 border border-amber-500/30 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-4">
+                <span className="px-2 py-1 rounded bg-amber-500/20 text-amber-400 text-xs font-bold">DOG</span>
+                <span className="text-white font-semibold">Underdogs Strategy</span>
+              </div>
+              <div className="space-y-2 font-mono text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="text-amber-400">✓</span>
+                  <span className="text-zinc-400">Spread:</span>
+                  <span className="text-white">7-14 points</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-amber-400">✓</span>
+                  <span className="text-zinc-400">Edge:</span>
+                  <span className="text-white">≥ 3.0 points</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-amber-400">✓</span>
+                  <span className="text-zinc-400">Side:</span>
+                  <span className="text-white">Bet the underdog</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-amber-400">✓</span>
+                  <span className="text-zinc-400">Filter:</span>
+                  <span className="text-white">Favorite must be Elite/High tier</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Shared criteria */}
           <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4 mb-6">
-            <div className="space-y-3 font-mono text-sm">
-              <div className="flex items-center gap-3">
-                <div className="w-6 h-6 bg-orange-500/20 rounded flex items-center justify-center text-orange-400 text-xs">1</div>
-                <span className="text-zinc-400">Conference:</span>
-                <span className="text-white">Big 12, SEC, Big Ten, Big East, ACC, Mountain West</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="w-6 h-6 bg-orange-500/20 rounded flex items-center justify-center text-orange-400 text-xs">2</div>
-                <span className="text-zinc-400">Spread Size:</span>
-                <span className="text-white">7-14 points</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="w-6 h-6 bg-orange-500/20 rounded flex items-center justify-center text-orange-400 text-xs">3</div>
-                <span className="text-zinc-400">Model Edge:</span>
-                <span className="text-white">≥ 3.0 points</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="w-6 h-6 bg-orange-500/20 rounded flex items-center justify-center text-orange-400 text-xs">4</div>
-                <span className="text-zinc-400">Side:</span>
-                <span className="text-white">Favorites only</span>
-              </div>
+            <div className="text-sm font-medium text-zinc-400 mb-3">Elite/High Tier Conferences (for both strategies):</div>
+            <div className="flex flex-wrap gap-2">
+              {['Big 12', 'SEC', 'Big Ten', 'Big East', 'ACC', 'Mountain West'].map(conf => (
+                <span key={conf} className="px-2 py-1 bg-zinc-800 text-white text-xs rounded">{conf}</span>
+              ))}
             </div>
           </div>
 
@@ -579,7 +663,7 @@ export default function ModelPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <div className="text-sm text-zinc-300">
-                <strong className="text-amber-400">Why Power Conference Favorites?</strong> When elite conference teams are 7-14 point favorites but our model says they should be favored by even more, the market is undervaluing them. This is the opposite of the typical "fade the public" strategy.
+                <strong className="text-amber-400">Why Both Sides?</strong> The model identifies when the market has mispriced power conference games. Sometimes the favorite is undervalued (bet FAV), sometimes the underdog is undervalued (bet DOG). The underdog strategy has exceptional 77.9% win rate but lower volume.
               </div>
             </div>
           </div>
@@ -664,44 +748,51 @@ export default function ModelPage() {
                 <tr>
                   <th className="px-4 py-3 text-left text-zinc-400 font-medium">Aspect</th>
                   <th className="px-4 py-3 text-center text-emerald-400 font-medium">CFB</th>
-                  <th className="px-4 py-3 text-center text-orange-400 font-medium">CBB</th>
+                  <th className="px-4 py-3 text-center text-emerald-400 font-medium">CBB FAV</th>
+                  <th className="px-4 py-3 text-center text-amber-400 font-medium">CBB DOG</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800">
                 <tr className="bg-zinc-900/30">
                   <td className="px-4 py-3 text-zinc-300">Model Type</td>
-                  <td className="px-4 py-3 text-center text-white">T-60 Ensemble (Elo+SP++PPA)</td>
-                  <td className="px-4 py-3 text-center text-white">Conference-Aware Rating</td>
+                  <td className="px-4 py-3 text-center text-white">T-60 Ensemble</td>
+                  <td className="px-4 py-3 text-center text-white" colSpan={2}>Conference-Aware Rating</td>
                 </tr>
                 <tr className="bg-zinc-900/30">
-                  <td className="px-4 py-3 text-zinc-300">Bet Sides</td>
-                  <td className="px-4 py-3 text-center text-white">Both (favorites + underdogs)</td>
-                  <td className="px-4 py-3 text-center text-white">Elite/High tier favorites only</td>
+                  <td className="px-4 py-3 text-zinc-300">Bet Side</td>
+                  <td className="px-4 py-3 text-center text-white">Both</td>
+                  <td className="px-4 py-3 text-center text-white">Favorites</td>
+                  <td className="px-4 py-3 text-center text-white">Underdogs</td>
                 </tr>
                 <tr className="bg-zinc-900/30">
                   <td className="px-4 py-3 text-zinc-300">Spread Filter</td>
                   <td className="px-4 py-3 text-center text-white">None</td>
-                  <td className="px-4 py-3 text-center text-white">7-14 points</td>
+                  <td className="px-4 py-3 text-center text-white">7-14 pts</td>
+                  <td className="px-4 py-3 text-center text-white">7-14 pts</td>
                 </tr>
                 <tr className="bg-zinc-900/30">
                   <td className="px-4 py-3 text-zinc-300">Edge Filter</td>
                   <td className="px-4 py-3 text-center text-white">2.5-5 pts</td>
                   <td className="px-4 py-3 text-center text-white">≥ 3 pts</td>
+                  <td className="px-4 py-3 text-center text-white">≥ 3 pts</td>
                 </tr>
                 <tr className="bg-zinc-900/30">
                   <td className="px-4 py-3 text-zinc-300">Win Rate</td>
                   <td className="px-4 py-3 text-center text-emerald-400">63.2%</td>
-                  <td className="px-4 py-3 text-center text-orange-400">55.9%</td>
+                  <td className="px-4 py-3 text-center text-emerald-400">54.5%</td>
+                  <td className="px-4 py-3 text-center text-amber-400 font-bold">77.9%</td>
                 </tr>
                 <tr className="bg-zinc-900/30">
                   <td className="px-4 py-3 text-zinc-300">ROI</td>
                   <td className="px-4 py-3 text-center text-emerald-400">+20.6%</td>
-                  <td className="px-4 py-3 text-center text-orange-400">+6.8%</td>
+                  <td className="px-4 py-3 text-center text-emerald-400">+4.0%</td>
+                  <td className="px-4 py-3 text-center text-amber-400 font-bold">+48.7%</td>
                 </tr>
                 <tr className="bg-zinc-900/30">
-                  <td className="px-4 py-3 text-zinc-300">Bets/Season</td>
-                  <td className="px-4 py-3 text-center text-white">~250</td>
-                  <td className="px-4 py-3 text-center text-white">~100</td>
+                  <td className="px-4 py-3 text-zinc-300">Total Bets</td>
+                  <td className="px-4 py-3 text-center text-white">758</td>
+                  <td className="px-4 py-3 text-center text-white">857</td>
+                  <td className="px-4 py-3 text-center text-white">86</td>
                 </tr>
               </tbody>
             </table>
@@ -728,7 +819,7 @@ export default function ModelPage() {
               <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
               <span>CFB Edge</span>
             </div>
-            <div>CFB: T-60 Ensemble v1.0 • CBB: Conference Rating v2 • December 2025</div>
+            <div>CFB: T-60 Ensemble v1.0 • CBB: Conference Rating v2.1 Dual • December 2025</div>
           </div>
         </div>
       </footer>
