@@ -180,9 +180,9 @@ export default function CbbPage() {
                 CBB Edge
               </span>
               <nav className="hidden sm:flex items-center gap-4 text-sm">
-                <span className="font-medium text-zinc-400">Elo Model</span>
+                <span className="font-medium text-zinc-400">Conference-Aware Model</span>
                 <span className="text-zinc-600">•</span>
-                <span className="text-zinc-500">Underdogs 10+ pts</span>
+                <span className="text-zinc-500">Power Conf Favorites 7-14 pts</span>
               </nav>
             </div>
             <div className="flex items-center gap-2 text-xs text-zinc-500">
@@ -494,17 +494,18 @@ export default function CbbPage() {
             <div>
               <h4 className="text-white font-medium mb-2">Bet Criteria</h4>
               <ul className="space-y-1">
-                <li>• Only bet <span className="text-emerald-400">underdogs</span> with spreads of 10+ points</li>
-                <li>• Model edge must be between 2.5-5 points</li>
-                <li>• Both teams must have played 5+ games</li>
+                <li>• Only bet <span className="text-emerald-400">favorites</span> from Elite/High tier conferences</li>
+                <li>• Spread must be between 7-14 points</li>
+                <li>• Model edge must be 3+ points</li>
+                <li>• Power conferences: Big 12, SEC, Big Ten, Big East, ACC, MWC</li>
               </ul>
             </div>
             <div>
-              <h4 className="text-white font-medium mb-2">Backtest Results</h4>
+              <h4 className="text-white font-medium mb-2">Backtest Results (2022-2025)</h4>
               <ul className="space-y-1">
-                <li>• <span className="text-emerald-400 font-bold">59.4%</span> win rate on 138 bets (2022-2024)</li>
-                <li>• <span className="text-emerald-400 font-bold">+13.5%</span> ROI after -110 juice</li>
-                <li>• Holdout test: Train +8.8% → Test +19.8%</li>
+                <li>• <span className="text-emerald-400 font-bold">55.9%</span> win rate on 390 bets</li>
+                <li>• <span className="text-emerald-400 font-bold">+6.8%</span> ROI after -110 juice</li>
+                <li>• Holdout test: Train +4.5% → Test +15.5%</li>
               </ul>
             </div>
           </div>

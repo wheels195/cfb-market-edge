@@ -1,16 +1,19 @@
 /**
  * CBB Sync Odds Job
  *
- * Polls The Odds API for CBB spreads and stores them
+ * Polls The Odds API for CBB spreads and stores them.
+ * Then matches odds to games and populates betting lines.
  */
 
 import { supabase } from '@/lib/db/client';
 import { getCbbOddsApiClient } from '../odds-api';
-import { OddsApiEvent } from '@/types/odds-api';
+import { matchOddsToGames } from './match-odds-to-games';
 
 export interface CbbSyncOddsResult {
   eventsPolled: number;
   ticksWritten: number;
+  gamesMatched: number;
+  linesWritten: number;
   errors: string[];
 }
 
@@ -40,6 +43,8 @@ export async function syncCbbOdds(): Promise<CbbSyncOddsResult> {
   const result: CbbSyncOddsResult = {
     eventsPolled: 0,
     ticksWritten: 0,
+    gamesMatched: 0,
+    linesWritten: 0,
     errors: [],
   };
 
@@ -99,6 +104,19 @@ export async function syncCbbOdds(): Promise<CbbSyncOddsResult> {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     result.errors.push(`API error: ${message}`);
+  }
+
+  // Now match odds to games and populate betting lines
+  try {
+    console.log('Matching odds to games...');
+    const matchResult = await matchOddsToGames();
+    result.gamesMatched = matchResult.gamesMatched;
+    result.linesWritten = matchResult.linesWritten;
+    result.errors.push(...matchResult.errors);
+    console.log(`Matched ${matchResult.gamesMatched} games, wrote ${matchResult.linesWritten} lines`);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    result.errors.push(`Match error: ${message}`);
   }
 
   return result;
