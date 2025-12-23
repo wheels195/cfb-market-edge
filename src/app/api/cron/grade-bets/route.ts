@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { gradeBets } from '@/lib/jobs/grade-bets';
 import { gradePaperBets } from '@/lib/jobs/grade-paper-bets';
+import { gradeGamePredictions } from '@/lib/jobs/grade-game-predictions';
 import { startJobRun, completeJobRun } from '@/lib/jobs/sync-events';
 
 export const dynamic = 'force-dynamic';
@@ -22,8 +23,11 @@ export async function GET(request: Request) {
     // Also grade paper_bets
     const paperResult = await gradePaperBets();
 
-    const totalGraded = result.betsGraded + paperResult.betsGraded;
-    const allErrors = [...result.errors, ...paperResult.errors];
+    // Grade CFB game_predictions (model predictions separate from manual bets)
+    const cfbPredResult = await gradeGamePredictions();
+
+    const totalGraded = result.betsGraded + paperResult.betsGraded + cfbPredResult.predictionsGraded;
+    const allErrors = [...result.errors, ...paperResult.errors, ...cfbPredResult.errors];
 
     if (jobId) {
       await completeJobRun(
@@ -31,7 +35,7 @@ export async function GET(request: Request) {
         allErrors.length > 0 ? 'failed' : 'success',
         totalGraded,
         allErrors.length > 0 ? allErrors.join('; ') : undefined,
-        { result, paperResult }
+        { result, paperResult, cfbPredResult }
       );
     }
 
@@ -39,9 +43,16 @@ export async function GET(request: Request) {
       success: allErrors.length === 0,
       betsGraded: result.betsGraded,
       paperBetsGraded: paperResult.betsGraded,
+      cfbPredictionsGraded: cfbPredResult.predictionsGraded,
       wins: result.wins + paperResult.wins,
       losses: result.losses + paperResult.losses,
       pushes: result.pushes + paperResult.pushes,
+      cfbPredictions: {
+        graded: cfbPredResult.predictionsGraded,
+        wins: cfbPredResult.wins,
+        losses: cfbPredResult.losses,
+        pushes: cfbPredResult.pushes,
+      },
       errors: allErrors,
     });
   } catch (error) {
