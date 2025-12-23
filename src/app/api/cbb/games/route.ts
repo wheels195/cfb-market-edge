@@ -116,11 +116,13 @@ export async function GET(request: Request) {
 
     if (filter === 'upcoming') {
       // CBBD returns 0-0 for upcoming games, not null
+      // Fetch more games to ensure we have enough with odds
       query = query
         .eq('home_score', 0)
         .eq('away_score', 0)
         .gte('start_date', now.toISOString())
-        .order('start_date', { ascending: true });
+        .order('start_date', { ascending: true })
+        .limit(300); // Fetch more to filter for games with odds
     } else if (filter === 'bets') {
       // For bets, fetch more games since we filter after
       query = query
@@ -259,7 +261,14 @@ export async function GET(request: Request) {
 
     // Filter based on requested view
     let filteredResult = result;
-    if (filter === 'bets') {
+    if (filter === 'upcoming') {
+      // For upcoming: Only show games WITH odds, sorted by start time
+      // Games with qualifying bets first, then other games with odds
+      const withOdds = result.filter(g => g.market_spread !== null);
+      const qualifying = withOdds.filter(g => g.qualifies_for_bet);
+      const nonQualifying = withOdds.filter(g => !g.qualifies_for_bet);
+      filteredResult = [...qualifying, ...nonQualifying].slice(0, limit);
+    } else if (filter === 'bets') {
       filteredResult = result.filter(g => g.qualifies_for_bet);
     } else if (filter === 'completed') {
       // Only show qualifying bets that have been graded

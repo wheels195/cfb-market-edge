@@ -279,7 +279,7 @@ export default function CbbPage() {
                 return (
                   <div
                     key={game.id}
-                    className={`rounded-xl border overflow-hidden transition-all hover:border-zinc-600 ${
+                    className={`rounded-xl border overflow-hidden transition-all hover:border-zinc-600 relative ${
                       isCompleted
                         ? game.bet_result === 'win'
                           ? 'bg-emerald-950/30 border-emerald-500/40 ring-1 ring-emerald-500/30'
@@ -287,7 +287,7 @@ export default function CbbPage() {
                           ? 'bg-red-950/20 border-red-500/30'
                           : 'bg-[#111] border-zinc-800/50'
                         : strongEdge
-                        ? 'bg-gradient-to-br from-emerald-950/40 to-[#111] border-2 border-emerald-500/50'
+                        ? 'bg-gradient-to-br from-emerald-950/50 to-[#111] border-2 border-emerald-400 shadow-lg shadow-emerald-500/20'
                         : hasEdge
                         ? 'bg-[#111] border-emerald-500/30'
                         : 'bg-zinc-900/50 border-zinc-700/40'
@@ -295,9 +295,17 @@ export default function CbbPage() {
                   >
                     {/* Game Header */}
                     <div className="px-4 py-3 flex items-center justify-between border-b border-zinc-800/50">
-                      <span className={`text-xs font-medium ${status.color}`}>
-                        {status.label}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        {/* Sparkle icon for qualifying bets */}
+                        {strongEdge && !isCompleted && (
+                          <svg className="w-4 h-4 text-emerald-400 animate-pulse" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 0L14.59 8.41L23 11L14.59 13.59L12 22L9.41 13.59L1 11L9.41 8.41L12 0Z" />
+                          </svg>
+                        )}
+                        <span className={`text-xs font-medium ${status.color}`}>
+                          {status.label}
+                        </span>
+                      </div>
                       {isCompleted && game.bet_result && (
                         <span className={`text-xs font-bold px-2 py-0.5 rounded ${
                           game.bet_result === 'win'
