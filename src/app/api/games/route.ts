@@ -176,6 +176,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const daysBack = parseInt(searchParams.get('daysBack') || '14');
     const daysAhead = parseInt(searchParams.get('daysAhead') || '14');
+    const filter = searchParams.get('filter') || 'all'; // 'all' | 'upcoming' | 'completed' | 'tracked'
 
     const now = new Date();
     const startDate = new Date(now.getTime() - daysBack * 24 * 60 * 60 * 1000);
@@ -503,7 +504,7 @@ export async function GET(request: NextRequest) {
 
     // Filter out completed games that don't have model predictions
     // (games we couldn't track because we didn't have data at the time)
-    const filteredGames = games.filter(game => {
+    let filteredGames = games.filter(game => {
       const isCompleted = game.status === 'final' || game.home_score !== null;
       if (isCompleted && !game.recommended_bet && !game.model_spread_home) {
         return false; // Skip completed games without predictions
@@ -511,7 +512,74 @@ export async function GET(request: NextRequest) {
       return true;
     });
 
-    return NextResponse.json({ games: filteredGames });
+    // Apply filter
+    if (filter === 'upcoming') {
+      filteredGames = filteredGames.filter(g =>
+        g.status === 'scheduled' && new Date(g.commence_time) > now
+      );
+    } else if (filter === 'completed') {
+      // Only show completed games with qualifying bets (edge >= 2.5)
+      filteredGames = filteredGames.filter(g =>
+        (g.status === 'final' || g.home_score !== null) &&
+        g.abs_edge !== null &&
+        g.abs_edge >= 2.5 &&
+        g.bet_result !== null
+      );
+    } else if (filter === 'tracked') {
+      // Show ALL completed games with any edge >= 1.0 for analysis
+      filteredGames = filteredGames.filter(g =>
+        (g.status === 'final' || g.home_score !== null) &&
+        g.abs_edge !== null &&
+        g.abs_edge >= 1.0
+      );
+    }
+
+    // Calculate stats for qualifying bets (edge >= 2.5)
+    const completedWithBets = games.filter(g =>
+      (g.status === 'final' || g.home_score !== null) &&
+      g.abs_edge !== null &&
+      g.abs_edge >= 2.5 &&
+      g.abs_edge <= 5.0 &&
+      g.bet_result !== null
+    );
+    const qualWins = completedWithBets.filter(g => g.bet_result === 'win').length;
+    const qualLosses = completedWithBets.filter(g => g.bet_result === 'loss').length;
+    const qualTotal = qualWins + qualLosses;
+    const qualProfit = (qualWins * 0.91) - qualLosses;
+    const qualRoi = qualTotal > 0 ? qualProfit / qualTotal : 0;
+
+    // Calculate stats for all tracked games (edge >= 1.0)
+    const trackedGames = games.filter(g =>
+      (g.status === 'final' || g.home_score !== null) &&
+      g.abs_edge !== null &&
+      g.abs_edge >= 1.0 &&
+      g.bet_result !== null
+    );
+    const trackedWins = trackedGames.filter(g => g.bet_result === 'win').length;
+    const trackedLosses = trackedGames.filter(g => g.bet_result === 'loss').length;
+    const trackedTotal = trackedWins + trackedLosses;
+    const trackedProfit = (trackedWins * 0.91) - trackedLosses;
+    const trackedRoi = trackedTotal > 0 ? trackedProfit / trackedTotal : 0;
+
+    return NextResponse.json({
+      games: filteredGames,
+      stats: {
+        total_bets: qualTotal,
+        wins: qualWins,
+        losses: qualLosses,
+        win_rate: qualTotal > 0 ? qualWins / qualTotal : 0,
+        profit_units: qualProfit,
+        roi: qualRoi,
+      },
+      tracked_stats: {
+        total_tracked: trackedTotal,
+        wins: trackedWins,
+        losses: trackedLosses,
+        win_rate: trackedTotal > 0 ? trackedWins / trackedTotal : 0,
+        profit_units: trackedProfit,
+        roi: trackedRoi,
+      },
+    });
   } catch (error) {
     console.error('Games API error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
