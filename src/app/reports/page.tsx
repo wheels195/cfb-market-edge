@@ -169,7 +169,7 @@ function SportReport({ report, title }: { report: Report | null; title: string }
                 <div className="font-semibold text-zinc-900 dark:text-zinc-100">
                   {report.favorites_record}
                 </div>
-                {report.favorites_roi !== null && (
+                {report.favorites_roi != null && (
                   <div
                     className={`text-sm ${
                       report.favorites_roi > 0
@@ -188,7 +188,7 @@ function SportReport({ report, title }: { report: Report | null; title: string }
                 <div className="font-semibold text-zinc-900 dark:text-zinc-100">
                   {report.underdogs_record}
                 </div>
-                {report.underdogs_roi !== null && (
+                {report.underdogs_roi != null && (
                   <div
                     className={`text-sm ${
                       report.underdogs_roi > 0
