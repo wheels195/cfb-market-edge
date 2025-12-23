@@ -211,12 +211,13 @@ team_elo_snapshots   - Weekly Elo ratings per team
 model_versions       - Model metadata
 projections          - Model outputs per event
 edges                - Computed edges per event/book
-game_predictions     - Locked predictions at kickoff
+game_predictions     - Locked predictions at kickoff (with bet_result)
 cfbd_betting_lines   - Historical CFBD betting data
 advanced_team_ratings - SP+ and other advanced metrics
+model_reports        - Weekly model performance analysis
 ```
 
-### Cron Jobs (Vercel) — As of December 22, 2025
+### Cron Jobs (Vercel) — As of December 23, 2025
 
 | Job | Schedule | Purpose |
 |-----|----------|---------|
@@ -224,8 +225,9 @@ advanced_team_ratings - SP+ and other advanced metrics
 | `materialize-edges` | Every 15 min | Calculate T-60 ensemble edges (PRODUCTION) |
 | `set-closing-lines` | Every 30 min | Lock closing line + prediction at kickoff |
 | `sync-results` | 6 AM daily | Pull final scores from CFBD |
-| `grade-bets` | 7 AM daily | Calculate WIN/LOSS for completed games |
+| `grade-bets` | 7 AM daily | Grade bet_records, paper_bets, and game_predictions |
 | `sync-elo` | 6:30 AM daily | Update Elo ratings after games |
+| `generate-report` | Weekly (Sundays) | Generate model performance reports |
 | `cleanup` | 3 AM daily | Clean old data |
 
 **REMOVED from cron (December 22, 2025):**
@@ -233,7 +235,9 @@ advanced_team_ratings - SP+ and other advanced metrics
 
 ### API Endpoints
 
-- `GET /api/games` - Games with edges, results, and recommendations
+- `GET /api/games` - CFB games with edges, results, and recommendations
+- `GET /api/cbb/games` - CBB games with edges and predictions
+- `GET /api/reports` - Model performance reports
 - `GET /api/cron/*` - Cron job endpoints
 - `GET /api/backtest/calibration` - Generate calibration curve from historical data
 
@@ -267,8 +271,16 @@ advanced_team_ratings - SP+ and other advanced metrics
 
 ### Frontend
 - `src/app/page.tsx` - Homepage with stats, results, upcoming games
-- `src/app/games/page.tsx` - Full games list with filters
+- `src/app/games/page.tsx` - CFB games list with filters
+- `src/app/cbb/page.tsx` - CBB games list with filters
+- `src/app/reports/page.tsx` - Model performance reports
 - `src/app/model/page.tsx` - Model documentation page
+
+### Model Performance Tracking
+- `src/lib/jobs/grade-game-predictions.ts` - Grades CFB game_predictions
+- `src/app/api/cron/generate-report/route.ts` - Weekly report generation
+- `src/app/api/reports/route.ts` - Reports API endpoint
+- `scripts/model-performance-analysis.ts` - Manual analysis script
 
 ---
 
@@ -397,6 +409,83 @@ cbb_game_predictions - Materialized edges and bet results
 ### Key Insight
 
 When power conference teams are 7-14 point favorites but the model says they should be favored by MORE, the market is undervaluing them. This is the opposite of typical "fade the public" strategies.
+
+---
+
+## Model Performance Reports
+
+### Overview
+
+The Reports system tracks live model performance and compares it to backtest expectations. This enables:
+- Early detection of model degradation
+- Edge bucket calibration validation
+- Statistical significance testing vs breakeven
+
+### Reports Page (`/reports`)
+
+Displays weekly performance summaries for both CFB and CBB:
+- Overall record, win rate, ROI
+- Comparison to backtest expectations
+- Edge bucket breakdown by size
+- Strategy breakdown (CBB: favorites vs underdogs)
+- Sample size adequacy assessment
+- Actionable recommendations
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `src/app/reports/page.tsx` | Reports UI page |
+| `src/app/api/reports/route.ts` | Reports API endpoint |
+| `src/app/api/cron/generate-report/route.ts` | Weekly report generation cron |
+| `src/lib/jobs/grade-game-predictions.ts` | CFB prediction grading job |
+| `scripts/model-performance-analysis.ts` | Manual analysis script |
+
+### Database Table: `model_reports`
+
+```sql
+model_reports (
+  id UUID PRIMARY KEY,
+  report_date DATE NOT NULL,
+  sport VARCHAR(10) NOT NULL,  -- 'cfb' or 'cbb'
+  total_bets INTEGER,
+  wins INTEGER,
+  losses INTEGER,
+  pushes INTEGER,
+  win_rate NUMERIC(5,4),
+  roi NUMERIC(6,4),
+  profit_units NUMERIC(8,2),
+  backtest_win_rate NUMERIC(5,4),
+  vs_backtest VARCHAR(20),     -- 'above', 'below', 'equal'
+  vs_backtest_significant BOOLEAN,
+  vs_breakeven_pvalue NUMERIC(6,4),
+  edge_buckets JSONB,
+  favorites_record VARCHAR(20),  -- CBB only
+  favorites_roi NUMERIC(6,4),
+  underdogs_record VARCHAR(20),
+  underdogs_roi NUMERIC(6,4),
+  sample_size_adequate BOOLEAN,
+  recommendation TEXT,
+  UNIQUE(report_date, sport)
+)
+```
+
+### Statistical Methodology
+
+- **Win Rate**: Wins / (Wins + Losses). Pushes excluded.
+- **ROI**: (Wins × 0.91 − Losses) / Total. Accounts for -110 juice.
+- **Breakeven**: 52.4% win rate required at -110.
+- **Significance**: Binomial test, p < 0.05 = significant.
+- **Sample Size**: CFB needs 50+ bets, CBB needs 100+ for reliable conclusions.
+
+### Live Results (December 23, 2025)
+
+| Sport | Record | Win% | ROI | vs Backtest |
+|-------|--------|------|-----|-------------|
+| CFB | 4-2 | 66.7% | +27.3% | Above (63.2%) |
+| CBB | 7-1 | 87.5% | +67.1% | Above (55.9%) |
+
+*Sample sizes too small for statistical conclusions. Continue collecting data.*
 
 ---
 
