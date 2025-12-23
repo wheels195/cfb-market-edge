@@ -25,6 +25,7 @@ interface CbbGame {
   spread_size: number | null;
   recommended_side: 'home' | 'away' | null;
   is_underdog_bet: boolean;
+  bet_strategy: 'favorite' | 'underdog' | null;  // Which strategy this qualifies under
   qualifies_for_bet: boolean;
   qualification_reason: string | null;
   home_score: number | null;
@@ -180,9 +181,11 @@ export default function CbbPage() {
                 CBB Edge
               </span>
               <nav className="hidden sm:flex items-center gap-4 text-sm">
-                <span className="font-medium text-zinc-400">Conference-Aware Model</span>
+                <span className="font-medium text-zinc-400">Dual Strategy</span>
                 <span className="text-zinc-600">•</span>
-                <span className="text-zinc-500">Power Conf Favorites 7-14 pts</span>
+                <span className="text-emerald-400">Favorites</span>
+                <span className="text-zinc-600">+</span>
+                <span className="text-amber-400">Underdogs</span>
               </nav>
             </div>
             <div className="flex items-center gap-2 text-xs text-zinc-500">
@@ -275,6 +278,7 @@ export default function CbbPage() {
                 const absEdge = game.edge_points;
                 const hasEdge = !isCompleted && absEdge !== null && absEdge >= 2.5;
                 const strongEdge = !isCompleted && game.qualifies_for_bet;
+                const isUnderdogBet = game.bet_strategy === 'underdog';
 
                 return (
                   <div
@@ -287,7 +291,9 @@ export default function CbbPage() {
                           ? 'bg-red-950/20 border-red-500/30'
                           : 'bg-[#111] border-zinc-800/50'
                         : strongEdge
-                        ? 'bg-gradient-to-br from-emerald-950/50 to-[#111] border-2 border-emerald-400 shadow-lg shadow-emerald-500/20'
+                        ? isUnderdogBet
+                          ? 'bg-gradient-to-br from-amber-950/50 to-[#111] border-2 border-amber-400 shadow-lg shadow-amber-500/20'
+                          : 'bg-gradient-to-br from-emerald-950/50 to-[#111] border-2 border-emerald-400 shadow-lg shadow-emerald-500/20'
                         : hasEdge
                         ? 'bg-[#111] border-emerald-500/30'
                         : 'bg-zinc-900/50 border-zinc-700/40'
@@ -296,15 +302,25 @@ export default function CbbPage() {
                     {/* Game Header */}
                     <div className="px-4 py-3 flex items-center justify-between border-b border-zinc-800/50">
                       <div className="flex items-center gap-2">
-                        {/* Sparkle icon for qualifying bets */}
+                        {/* Sparkle icon for qualifying bets - amber for underdog, green for favorite */}
                         {strongEdge && !isCompleted && (
-                          <svg className="w-4 h-4 text-emerald-400 animate-pulse" viewBox="0 0 24 24" fill="currentColor">
+                          <svg className={`w-4 h-4 animate-pulse ${isUnderdogBet ? 'text-amber-400' : 'text-emerald-400'}`} viewBox="0 0 24 24" fill="currentColor">
                             <path d="M12 0L14.59 8.41L23 11L14.59 13.59L12 22L9.41 13.59L1 11L9.41 8.41L12 0Z" />
                           </svg>
                         )}
                         <span className={`text-xs font-medium ${status.color}`}>
                           {status.label}
                         </span>
+                        {/* Strategy badge */}
+                        {strongEdge && !isCompleted && (
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                            isUnderdogBet
+                              ? 'bg-amber-500/20 text-amber-400'
+                              : 'bg-emerald-500/20 text-emerald-400'
+                          }`}>
+                            {isUnderdogBet ? 'DOG' : 'FAV'}
+                          </span>
+                        )}
                       </div>
                       {isCompleted && game.bet_result && (
                         <span className={`text-xs font-bold px-2 py-0.5 rounded ${
@@ -320,7 +336,9 @@ export default function CbbPage() {
                       {!isCompleted && absEdge !== null && absEdge >= 2.5 && (
                         <span className={`text-xs font-bold px-2 py-0.5 rounded ${
                           strongEdge
-                            ? 'bg-emerald-500 text-black'
+                            ? isUnderdogBet
+                              ? 'bg-amber-500 text-black'
+                              : 'bg-emerald-500 text-black'
                             : 'bg-emerald-500/20 text-emerald-400'
                         }`}>
                           +{absEdge.toFixed(1)} EDGE
@@ -455,7 +473,7 @@ export default function CbbPage() {
                             {strongEdge && !isCompleted ? (
                               <div className="flex items-center justify-between">
                                 <span className="text-zinc-500 text-xs">via DK</span>
-                                <div className="font-bold text-sm px-3 py-1 rounded bg-emerald-500 text-black">
+                                <div className={`font-bold text-sm px-3 py-1 rounded ${isUnderdogBet ? 'bg-amber-500' : 'bg-emerald-500'} text-black`}>
                                   BET: {game.recommended_side === 'home'
                                     ? `${getShortName(game.home_team.name)} ${formatSpread(game.market_spread)}`
                                     : `${getShortName(game.away_team.name)} ${formatSpread(-(game.market_spread || 0))}`
@@ -497,25 +515,37 @@ export default function CbbPage() {
 
         {/* Strategy Info Footer */}
         <div className="mt-12 bg-zinc-900/50 border border-zinc-800/50 rounded-2xl p-6">
-          <h3 className="text-sm font-semibold text-zinc-400 mb-4 uppercase tracking-wider">Strategy Details</h3>
+          <h3 className="text-sm font-semibold text-zinc-400 mb-4 uppercase tracking-wider">Dual Strategy</h3>
           <div className="grid md:grid-cols-2 gap-6 text-sm text-zinc-400">
-            <div>
-              <h4 className="text-white font-medium mb-2">Bet Criteria</h4>
-              <ul className="space-y-1">
-                <li>• Only bet <span className="text-emerald-400">favorites</span> from Elite/High tier conferences</li>
-                <li>• Spread must be between 7-14 points</li>
-                <li>• Model edge must be 3+ points</li>
-                <li>• Power conferences: Big 12, SEC, Big Ten, Big East, ACC, MWC</li>
+            {/* Favorites Strategy */}
+            <div className="border border-emerald-500/20 rounded-xl p-4 bg-emerald-950/10">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-xs font-bold">FAV</span>
+                <h4 className="text-white font-medium">Favorites Strategy</h4>
+              </div>
+              <ul className="space-y-1 text-xs">
+                <li>• Bet favorites from Elite/High tier conferences</li>
+                <li>• Spread: 7-14 pts, Edge: 3+ pts</li>
+                <li>• <span className="text-emerald-400">54.5%</span> win rate (857 bets)</li>
+                <li>• <span className="text-emerald-400">+4.0%</span> ROI</li>
               </ul>
             </div>
-            <div>
-              <h4 className="text-white font-medium mb-2">Backtest Results (2022-2025)</h4>
-              <ul className="space-y-1">
-                <li>• <span className="text-emerald-400 font-bold">55.9%</span> win rate on 390 bets</li>
-                <li>• <span className="text-emerald-400 font-bold">+6.8%</span> ROI after -110 juice</li>
-                <li>• Holdout test: Train +4.5% → Test +15.5%</li>
+            {/* Underdogs Strategy */}
+            <div className="border border-amber-500/20 rounded-xl p-4 bg-amber-950/10">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 text-xs font-bold">DOG</span>
+                <h4 className="text-white font-medium">Underdogs Strategy</h4>
+              </div>
+              <ul className="space-y-1 text-xs">
+                <li>• Bet underdogs vs Elite/High tier favorites</li>
+                <li>• Spread: 7-14 pts, Edge: 3+ pts</li>
+                <li>• <span className="text-amber-400 font-bold">77.9%</span> win rate (86 bets)</li>
+                <li>• <span className="text-amber-400 font-bold">+48.7%</span> ROI</li>
               </ul>
             </div>
+          </div>
+          <div className="mt-4 pt-4 border-t border-zinc-800/50 text-xs text-zinc-500">
+            <strong className="text-zinc-400">Combined:</strong> 943 bets total • Underdogs have higher ROI but lower volume
           </div>
         </div>
       </main>

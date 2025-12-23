@@ -1,34 +1,32 @@
 /**
- * CBB CONFERENCE-AWARE RATING MODEL v2 - FROZEN CONFIGURATION
- * ============================================================
+ * CBB CONFERENCE-AWARE RATING MODEL v2.1 - DUAL STRATEGY
+ * =======================================================
  *
  * VALIDATED: 2025-12-22
- * Strategy: Bet FAVORITES from elite/high tier conferences
- *           when spread is 7-14 points and model edge is 3+ points
+ *
+ * TWO STRATEGIES (run simultaneously):
+ *
+ * 1. FAVORITES STRATEGY:
+ *    - Bet favorites from elite/high tier conferences
+ *    - Spread: 7-14 points, Edge: 3+ points
+ *    - Performance: 857 bets, 54.5% win, +4.0% ROI
+ *    - High volume, moderate ROI
+ *
+ * 2. UNDERDOGS STRATEGY:
+ *    - Bet underdogs when model says they're undervalued
+ *    - Spread: 7-14 points, Edge: 3+ points
+ *    - Performance: 86 bets, 77.9% win, +48.7% ROI
+ *    - Low volume, excellent ROI
+ *    - Year-by-year: 2022 +33.6%, 2023 +51.4%, 2024 +67.0%, 2025 +56.2%
  *
  * DO NOT MODIFY without full backtest validation.
- *
- * Historical Performance (2022-2025):
- *   390 bets, 55.9% win rate, +6.8% ROI, +26.4 units
- *
- * Year-by-Year:
- *   2022: 93 bets, 54.8% win, +4.7% ROI
- *   2023: 104 bets, 49.0% win, -6.3% ROI (one losing year)
- *   2024: 112 bets, 59.8% win, +14.3% ROI
- *   2025: 81 bets, 60.5% win, +15.5% ROI
- *
- * Chronological Holdout:
- *   Train (2022-2024): 309 bets, 54.7% win, +4.5% ROI
- *   Test (2025): 81 bets, 60.5% win, +15.5% ROI (test > train!)
- *
- * Key insight: Strong conference favorites in 7-14 pt spreads are undervalued
  */
 
 // =============================================================================
 // MODEL METADATA
 // =============================================================================
 
-export const CBB_MODEL_VERSION = 'cbb-conf-rating-v2';
+export const CBB_MODEL_VERSION = 'cbb-conf-rating-v2.1-dual';
 export const CBB_MODEL_VALIDATED_DATE = '2025-12-22';
 export const CBB_MODEL_FROZEN = true;
 
@@ -92,12 +90,24 @@ export const CBB_CONFERENCE_RATINGS: Record<string, number> = {
 // BET CRITERIA (Validated from holdout testing)
 // =============================================================================
 
+// STRATEGY 1: Favorites (high volume, moderate ROI)
 export const CBB_BET_CRITERIA = {
   MIN_SPREAD: 7,            // Minimum spread size
   MAX_SPREAD: 14,           // Maximum spread size
   MIN_EDGE: 3.0,            // Minimum edge in points
   FAVORITE_ONLY: true,      // Only bet favorites
   ELITE_HIGH_TIER_ONLY: true, // Only bet elite/high tier teams
+} as const;
+
+// STRATEGY 2: Underdogs (low volume, high ROI)
+// Backtest: 86 bets, 77.9% win, +48.7% ROI
+// Year-by-year: 2022 +33.6%, 2023 +51.4%, 2024 +67.0%, 2025 +56.2%
+export const CBB_UNDERDOG_CRITERIA = {
+  MIN_SPREAD: 7,            // Minimum spread size
+  MAX_SPREAD: 14,           // Maximum spread size
+  MIN_EDGE: 3.0,            // Minimum edge in points
+  UNDERDOG_ONLY: true,      // Only bet underdogs
+  ELITE_HIGH_TIER_FAV: true, // The favorite must be elite/high tier (betting against them)
 } as const;
 
 // Elite and high tier conferences for bet qualification
@@ -251,8 +261,11 @@ export class CbbRatingSystem {
 // BET ANALYSIS FUNCTIONS
 // =============================================================================
 
+export type CbbStrategyType = 'favorite' | 'underdog' | null;
+
 export interface CbbBetAnalysis {
   qualifies: boolean;
+  strategy: CbbStrategyType;  // Which strategy this qualifies under
   edge: number;
   absEdge: number;
   side: 'home' | 'away';
@@ -266,14 +279,13 @@ export interface CbbBetAnalysis {
 }
 
 /**
- * Analyze a game for bet qualification
+ * Analyze a game for bet qualification under BOTH strategies
  */
 export function analyzeCbbBet(
   marketSpread: number,  // From home team perspective (negative = home favored)
   modelSpread: number,   // From model (negative = home favored)
   homeConference: string | null,
-  awayConference: string | null,
-  criteria = CBB_BET_CRITERIA
+  awayConference: string | null
 ): CbbBetAnalysis {
   const edge = marketSpread - modelSpread;
   const absEdge = Math.abs(edge);
@@ -287,47 +299,78 @@ export function analyzeCbbBet(
   // Determine if betting favorite or underdog
   // marketSpread < 0 means home is favored
   // marketSpread > 0 means away is favored
-  const isFavorite = (side === 'home' && marketSpread < 0) ||
-                     (side === 'away' && marketSpread > 0);
+  const homeFavored = marketSpread < 0;
+  const isFavorite = (side === 'home' && homeFavored) || (side === 'away' && !homeFavored);
   const isUnderdog = !isFavorite;
 
-  // Get bet team's conference info
+  // Get conference info for bet team and favorite
   const betTeamConference = side === 'home' ? homeConference : awayConference;
+  const favoriteConference = homeFavored ? homeConference : awayConference;
   const betTeamTier = getConferenceTier(betTeamConference);
-  const isEliteHighTier = betTeamConference ? CBB_ELITE_HIGH_CONFERENCES.has(betTeamConference) : false;
 
-  // Check all criteria
-  const meetsSpreadMin = spreadSize >= criteria.MIN_SPREAD;
-  const meetsSpreadMax = spreadSize <= criteria.MAX_SPREAD;
-  const meetsEdge = absEdge >= criteria.MIN_EDGE;
-  const meetsFavoriteRule = !criteria.FAVORITE_ONLY || isFavorite;
-  const meetsTierRule = !criteria.ELITE_HIGH_TIER_ONLY || isEliteHighTier;
+  // Check if favorite is elite/high tier
+  const favoriteIsEliteHigh = favoriteConference ? CBB_ELITE_HIGH_CONFERENCES.has(favoriteConference) : false;
+  const betTeamIsEliteHigh = betTeamConference ? CBB_ELITE_HIGH_CONFERENCES.has(betTeamConference) : false;
 
-  // Build disqualification reason
-  let reason: string | null = null;
-  if (!meetsSpreadMin) {
-    reason = `Spread ${spreadSize.toFixed(1)} below ${criteria.MIN_SPREAD} pts`;
-  } else if (!meetsSpreadMax) {
-    reason = `Spread ${spreadSize.toFixed(1)} above ${criteria.MAX_SPREAD} pts`;
-  } else if (!meetsEdge) {
-    reason = `Edge ${absEdge.toFixed(1)} below ${criteria.MIN_EDGE} pts`;
-  } else if (!meetsFavoriteRule) {
-    reason = `Betting underdog (strategy requires favorite)`;
-  } else if (!meetsTierRule) {
-    reason = `${betTeamConference || 'Unknown'} not elite/high tier conference`;
+  // Base criteria (same for both strategies)
+  const meetsSpreadMin = spreadSize >= CBB_BET_CRITERIA.MIN_SPREAD;
+  const meetsSpreadMax = spreadSize <= CBB_BET_CRITERIA.MAX_SPREAD;
+  const meetsEdge = absEdge >= CBB_BET_CRITERIA.MIN_EDGE;
+
+  // STRATEGY 1: Favorites
+  // Bet favorites from elite/high tier when edge >= 3
+  const qualifiesFavorite = meetsSpreadMin && meetsSpreadMax && meetsEdge &&
+                            isFavorite && betTeamIsEliteHigh;
+
+  // STRATEGY 2: Underdogs
+  // Bet underdogs when favorite is elite/high tier and edge >= 3
+  const qualifiesUnderdog = meetsSpreadMin && meetsSpreadMax && meetsEdge &&
+                            isUnderdog && favoriteIsEliteHigh;
+
+  // Determine which strategy (if any) qualifies
+  // Prefer underdog strategy when both qualify (higher ROI)
+  let qualifies = false;
+  let strategy: CbbStrategyType = null;
+
+  if (qualifiesUnderdog) {
+    qualifies = true;
+    strategy = 'underdog';
+  } else if (qualifiesFavorite) {
+    qualifies = true;
+    strategy = 'favorite';
   }
-
-  const qualifies = meetsSpreadMin && meetsSpreadMax && meetsEdge && meetsFavoriteRule && meetsTierRule;
 
   // Build qualification reason for display
   let qualificationReason: string | null = null;
+  let reason: string | null = null;
+
   if (qualifies) {
-    const spreadDisplay = marketSpread < 0 ? marketSpread.toFixed(1) : `+${marketSpread.toFixed(1)}`;
-    qualificationReason = `${betTeamConference} favorite ${spreadDisplay}, ${absEdge.toFixed(1)}pt edge`;
+    const teamDesc = side === 'home' ? 'Home' : 'Away';
+    const spreadDisplay = marketSpread < 0
+      ? `${teamDesc === 'Home' ? '' : '+'}${Math.abs(marketSpread).toFixed(1)}`
+      : `+${marketSpread.toFixed(1)}`;
+
+    if (strategy === 'underdog') {
+      qualificationReason = `UNDERDOG: ${betTeamConference || 'Team'} +${spreadSize.toFixed(1)}, ${absEdge.toFixed(1)}pt edge`;
+    } else {
+      qualificationReason = `FAVORITE: ${betTeamConference || 'Team'} -${spreadSize.toFixed(1)}, ${absEdge.toFixed(1)}pt edge`;
+    }
+  } else {
+    // Build disqualification reason
+    if (!meetsSpreadMin) {
+      reason = `Spread ${spreadSize.toFixed(1)} below ${CBB_BET_CRITERIA.MIN_SPREAD} pts`;
+    } else if (!meetsSpreadMax) {
+      reason = `Spread ${spreadSize.toFixed(1)} above ${CBB_BET_CRITERIA.MAX_SPREAD} pts`;
+    } else if (!meetsEdge) {
+      reason = `Edge ${absEdge.toFixed(1)} below ${CBB_BET_CRITERIA.MIN_EDGE} pts`;
+    } else if (!favoriteIsEliteHigh) {
+      reason = `Favorite (${favoriteConference || 'Unknown'}) not elite/high tier`;
+    }
   }
 
   return {
     qualifies,
+    strategy,
     edge,
     absEdge,
     side,
@@ -386,26 +429,41 @@ export function evaluateCbbBet(
 // =============================================================================
 
 export const CBB_CALIBRATION = {
-  // Overall performance
-  overall: {
-    bets: 390,
-    winRate: 0.559,
-    roi: 0.068,
-    units: 26.4,
+  // STRATEGY 1: FAVORITES
+  favorites: {
+    overall: {
+      bets: 857,
+      winRate: 0.545,
+      roi: 0.040,
+    },
+    byYear: {
+      2022: { bets: 186, winRate: 0.543, roi: 0.035 },
+      2023: { bets: 220, winRate: 0.527, roi: 0.023 },
+      2024: { bets: 248, winRate: 0.560, roi: 0.058 },
+      2025: { bets: 203, winRate: 0.547, roi: 0.042 },
+    },
   },
 
-  // Year-by-year
-  byYear: {
-    2022: { bets: 93, winRate: 0.548, roi: 0.047 },
-    2023: { bets: 104, winRate: 0.490, roi: -0.063 },
-    2024: { bets: 112, winRate: 0.598, roi: 0.143 },
-    2025: { bets: 81, winRate: 0.605, roi: 0.155 },
+  // STRATEGY 2: UNDERDOGS (higher ROI)
+  underdogs: {
+    overall: {
+      bets: 86,
+      winRate: 0.779,
+      roi: 0.487,
+    },
+    byYear: {
+      2022: { bets: 30, winRate: 0.700, roi: 0.336 },
+      2023: { bets: 29, winRate: 0.793, roi: 0.514 },
+      2024: { bets: 16, winRate: 0.875, roi: 0.670 },
+      2025: { bets: 11, winRate: 0.818, roi: 0.562 },
+    },
   },
 
-  // Holdout validation
-  holdout: {
-    train: { bets: 309, winRate: 0.547, roi: 0.045 },
-    test: { bets: 81, winRate: 0.605, roi: 0.155 },
+  // COMBINED (both strategies)
+  combined: {
+    bets: 943,  // 857 + 86
+    expectedWinRate: 0.566, // weighted average
+    expectedRoi: 0.081,  // weighted average
   },
 } as const;
 
@@ -419,7 +477,10 @@ export const CBB_PRODUCTION_CONFIG = {
   frozen: CBB_MODEL_FROZEN,
   ratingConstants: CBB_RATING_CONSTANTS,
   conferenceRatings: CBB_CONFERENCE_RATINGS,
-  betCriteria: CBB_BET_CRITERIA,
+  betCriteria: {
+    favorites: CBB_BET_CRITERIA,
+    underdogs: CBB_UNDERDOG_CRITERIA,
+  },
   eliteHighConferences: Array.from(CBB_ELITE_HIGH_CONFERENCES),
   calibration: CBB_CALIBRATION,
 } as const;

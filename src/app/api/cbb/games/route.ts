@@ -28,6 +28,7 @@ interface CbbGame {
   spread_size: number | null;
   recommended_side: 'home' | 'away' | null;
   is_underdog_bet: boolean;
+  bet_strategy: 'favorite' | 'underdog' | null;  // NEW: Which strategy this qualifies under
   qualifies_for_bet: boolean;
   qualification_reason: string | null;
   home_score: number | null;
@@ -190,6 +191,7 @@ export async function GET(request: Request) {
       let analysis: {
         qualifies: boolean;
         isUnderdog: boolean;
+        strategy: 'favorite' | 'underdog' | null;
         absEdge: number;
         spreadSize: number;
         side: 'home' | 'away';
@@ -198,6 +200,7 @@ export async function GET(request: Request) {
       } = {
         qualifies: false,
         isUnderdog: false,
+        strategy: null,
         absEdge: 0,
         spreadSize: 0,
         side: 'home',
@@ -215,6 +218,7 @@ export async function GET(request: Request) {
         analysis = {
           qualifies: betAnalysis.qualifies,
           isUnderdog: betAnalysis.isUnderdog,
+          strategy: betAnalysis.strategy,
           absEdge: betAnalysis.absEdge,
           spreadSize: betAnalysis.spreadSize,
           side: betAnalysis.side,
@@ -251,6 +255,7 @@ export async function GET(request: Request) {
         spread_size: analysis.spreadSize,
         recommended_side: analysis.qualifies ? analysis.side : null,
         is_underdog_bet: analysis.isUnderdog,
+        bet_strategy: analysis.strategy,
         qualifies_for_bet: prediction?.qualifies_for_bet || analysis.qualifies,
         qualification_reason: prediction?.qualification_reason || analysis.qualificationReason || analysis.reason,
         home_score: game.home_score,
