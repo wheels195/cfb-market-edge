@@ -138,10 +138,16 @@ export async function GET(request: Request) {
         .or('home_score.neq.0,away_score.neq.0')
         .order('start_date', { ascending: false })
         .limit(500); // Fetch more to find qualifying bets
+    } else if (filter === 'tracked') {
+      // Tracked = completed games with ANY edge (for analysis)
+      query = query
+        .or('home_score.neq.0,away_score.neq.0')
+        .order('start_date', { ascending: false })
+        .limit(500);
     }
 
-    // Don't override limit for 'bets' and 'completed' filters (already set to 500)
-    if (filter !== 'bets' && filter !== 'completed') {
+    // Don't override limit for 'bets', 'completed', and 'tracked' filters (already set to 500)
+    if (filter !== 'bets' && filter !== 'completed' && filter !== 'tracked') {
       query = query.limit(limit);
     }
 
@@ -253,7 +259,8 @@ export async function GET(request: Request) {
         model_spread: modelSpread,
         edge_points: analysis.absEdge,
         spread_size: analysis.spreadSize,
-        recommended_side: analysis.qualifies ? analysis.side : null,
+        // Show recommended side for any game with edge >= 2.5 (for tracking/analysis)
+        recommended_side: analysis.absEdge >= 2.5 ? analysis.side : null,
         is_underdog_bet: analysis.isUnderdog,
         bet_strategy: analysis.strategy,
         qualifies_for_bet: prediction?.qualifies_for_bet || analysis.qualifies,
@@ -278,31 +285,57 @@ export async function GET(request: Request) {
     } else if (filter === 'completed') {
       // Only show qualifying bets that have been graded
       filteredResult = result.filter(g => g.qualifies_for_bet && g.bet_result !== null);
+    } else if (filter === 'tracked') {
+      // Show ALL games with meaningful edge (2.5+ pts) for analysis
+      // This includes qualifying AND non-qualifying games
+      filteredResult = result.filter(g =>
+        g.status === 'completed' &&
+        g.edge_points !== null &&
+        g.edge_points >= 2.5 &&
+        g.bet_result !== null
+      );
     }
 
-    // Get season stats
+    // Get season stats for qualifying bets
     const { data: stats } = await supabase
       .from('cbb_game_predictions')
-      .select('bet_result, qualifies_for_bet')
-      .eq('qualifies_for_bet', true)
+      .select('bet_result, qualifies_for_bet, edge_points')
       .not('bet_result', 'is', null);
 
-    const wins = stats?.filter(s => s.bet_result === 'win').length || 0;
-    const losses = stats?.filter(s => s.bet_result === 'loss').length || 0;
-    const totalBets = wins + losses;
-    const profitUnits = (wins * 0.91) - losses;
-    const roi = totalBets > 0 ? profitUnits / totalBets : 0;
+    // Qualifying bets stats
+    const qualifyingStats = stats?.filter(s => s.qualifies_for_bet) || [];
+    const qualWins = qualifyingStats.filter(s => s.bet_result === 'win').length;
+    const qualLosses = qualifyingStats.filter(s => s.bet_result === 'loss').length;
+    const qualTotal = qualWins + qualLosses;
+    const qualProfit = (qualWins * 0.91) - qualLosses;
+    const qualRoi = qualTotal > 0 ? qualProfit / qualTotal : 0;
+
+    // Tracked stats (all games with edge >= 2.5, for analysis)
+    const trackedStats = stats?.filter(s => s.edge_points !== null && s.edge_points >= 2.5) || [];
+    const trackedWins = trackedStats.filter(s => s.bet_result === 'win').length;
+    const trackedLosses = trackedStats.filter(s => s.bet_result === 'loss').length;
+    const trackedTotal = trackedWins + trackedLosses;
+    const trackedProfit = (trackedWins * 0.91) - trackedLosses;
+    const trackedRoi = trackedTotal > 0 ? trackedProfit / trackedTotal : 0;
 
     return NextResponse.json({
       games: filteredResult,
       season,
       stats: {
-        total_bets: totalBets,
-        wins,
-        losses,
-        win_rate: totalBets > 0 ? wins / totalBets : 0,
-        profit_units: profitUnits,
-        roi,
+        total_bets: qualTotal,
+        wins: qualWins,
+        losses: qualLosses,
+        win_rate: qualTotal > 0 ? qualWins / qualTotal : 0,
+        profit_units: qualProfit,
+        roi: qualRoi,
+      },
+      tracked_stats: {
+        total_tracked: trackedTotal,
+        wins: trackedWins,
+        losses: trackedLosses,
+        win_rate: trackedTotal > 0 ? trackedWins / trackedTotal : 0,
+        profit_units: trackedProfit,
+        roi: trackedRoi,
       },
     });
   } catch (error) {

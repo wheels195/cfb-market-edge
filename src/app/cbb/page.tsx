@@ -44,6 +44,14 @@ interface ApiResponse {
     profit_units: number;
     roi: number;
   };
+  tracked_stats: {
+    total_tracked: number;
+    wins: number;
+    losses: number;
+    win_rate: number;
+    profit_units: number;
+    roi: number;
+  };
 }
 
 function formatSpread(spread: number | null): string {
@@ -132,8 +140,9 @@ function getGameStatus(game: CbbGame): { label: string; color: string } {
 export default function CbbPage() {
   const [games, setGames] = useState<CbbGame[]>([]);
   const [stats, setStats] = useState<ApiResponse['stats'] | null>(null);
+  const [trackedStats, setTrackedStats] = useState<ApiResponse['tracked_stats'] | null>(null);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'upcoming' | 'completed' | 'bets'>('upcoming');
+  const [filter, setFilter] = useState<'upcoming' | 'completed' | 'bets' | 'tracked'>('upcoming');
 
   useEffect(() => {
     setLoading(true);
@@ -142,6 +151,7 @@ export default function CbbPage() {
       .then((data: ApiResponse) => {
         setGames(data.games || []);
         setStats(data.stats);
+        setTrackedStats(data.tracked_stats);
         setLoading(false);
       })
       .catch(err => {
@@ -200,7 +210,7 @@ export default function CbbPage() {
       <div className="border-b border-zinc-800/50 bg-[#0a0a0a] sticky top-14 z-10">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-1 py-3">
-            {(['upcoming', 'bets', 'completed'] as const).map(f => (
+            {(['upcoming', 'bets', 'completed', 'tracked'] as const).map(f => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
@@ -210,7 +220,7 @@ export default function CbbPage() {
                     : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900'
                 }`}
               >
-                {f === 'upcoming' ? 'Upcoming' : f === 'bets' ? 'Qualifying Bets' : 'Results'}
+                {f === 'upcoming' ? 'Upcoming' : f === 'bets' ? 'Qualifying Bets' : f === 'completed' ? 'Results' : 'Tracked'}
               </button>
             ))}
             <div className="ml-auto text-sm text-zinc-600">
@@ -221,8 +231,33 @@ export default function CbbPage() {
       </div>
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Season Stats */}
-        {stats && stats.total_bets > 0 && (
+        {/* Season Stats - Show qualifying stats for most views, tracked stats for tracked view */}
+        {filter === 'tracked' && trackedStats && trackedStats.total_tracked > 0 ? (
+          <div className="mb-8 p-4 bg-gradient-to-r from-purple-950/40 to-zinc-900/40 rounded-xl border border-purple-500/30">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-purple-400 text-sm font-semibold">Tracked Predictions (Edge ≥ 2.5)</span>
+              <span className="text-zinc-500 text-xs">All games with model edge, for analysis</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-6 text-sm">
+              <div className="flex items-center gap-2">
+                <span className="text-zinc-500">Tracked:</span>
+                <span className="text-white font-bold">{trackedStats.wins}-{trackedStats.losses}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-zinc-500">Win Rate:</span>
+                <span className={`font-bold ${trackedStats.win_rate >= 0.52 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {(trackedStats.win_rate * 100).toFixed(1)}%
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-zinc-500">ROI:</span>
+                <span className={`font-bold ${trackedStats.roi >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {trackedStats.roi >= 0 ? '+' : ''}{(trackedStats.roi * 100).toFixed(1)}%
+                </span>
+              </div>
+            </div>
+          </div>
+        ) : stats && stats.total_bets > 0 && (
           <div className="mb-8 p-4 bg-gradient-to-r from-zinc-900/80 to-zinc-900/40 rounded-xl border border-zinc-800/50">
             <div className="flex flex-wrap items-center gap-6 text-sm">
               <div className="flex items-center gap-2">
@@ -245,23 +280,42 @@ export default function CbbPage() {
           </div>
         )}
 
-        {/* Legend */}
-        <div className="mb-8 p-4 bg-gradient-to-r from-zinc-900/80 to-zinc-900/40 rounded-xl border border-zinc-800/50">
-          <div className="flex flex-wrap items-center gap-6 text-sm">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-emerald-500/20 border border-emerald-500" />
-              <span className="text-zinc-400">Market = Sportsbook line</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-blue-500/20 border border-blue-500" />
-              <span className="text-zinc-400">Model = Elo projection</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-emerald-400 font-semibold">+2.5</span>
-              <span className="text-zinc-400">= Edge in points</span>
+        {/* Legend - show different content for tracked view */}
+        {filter === 'tracked' ? (
+          <div className="mb-8 p-4 bg-gradient-to-r from-purple-950/30 to-zinc-900/40 rounded-xl border border-purple-500/20">
+            <div className="text-sm text-zinc-400 space-y-2">
+              <p><span className="text-purple-400 font-semibold">Tracked Predictions</span> shows all completed games where the model had 2.5+ point edge, regardless of whether they met the strict betting criteria.</p>
+              <p>Use this to analyze model performance across different edge sizes and scenarios for future refinement.</p>
+              <div className="flex flex-wrap gap-4 mt-3 pt-3 border-t border-zinc-800/50">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400">TRACKED</span>
+                  <span className="text-zinc-500">= Non-qualifying (for analysis only)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400">WIN</span>
+                  <span className="text-zinc-500">= Qualifying bet result</span>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="mb-8 p-4 bg-gradient-to-r from-zinc-900/80 to-zinc-900/40 rounded-xl border border-zinc-800/50">
+            <div className="flex flex-wrap items-center gap-6 text-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-emerald-500/20 border border-emerald-500" />
+                <span className="text-zinc-400">Market = Sportsbook line</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-blue-500/20 border border-blue-500" />
+                <span className="text-zinc-400">Model = Elo projection</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-emerald-400 font-semibold">+2.5</span>
+                <span className="text-zinc-400">= Edge in points</span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {Object.entries(gamesByDate).map(([date, dateGames]) => (
           <div key={date} className="mb-10">
@@ -279,13 +333,20 @@ export default function CbbPage() {
                 const hasEdge = !isCompleted && absEdge !== null && absEdge >= 2.5;
                 const strongEdge = !isCompleted && game.qualifies_for_bet;
                 const isUnderdogBet = game.bet_strategy === 'underdog';
+                const isTrackedOnly = filter === 'tracked' && !game.qualifies_for_bet;
 
                 return (
                   <div
                     key={game.id}
                     className={`rounded-xl border overflow-hidden transition-all hover:border-zinc-600 relative ${
                       isCompleted
-                        ? game.bet_result === 'win'
+                        ? isTrackedOnly
+                          ? game.bet_result === 'win'
+                            ? 'bg-purple-950/30 border-purple-500/40 ring-1 ring-purple-500/30'
+                            : game.bet_result === 'loss'
+                            ? 'bg-purple-950/10 border-purple-500/20'
+                            : 'bg-[#111] border-zinc-800/50'
+                          : game.bet_result === 'win'
                           ? 'bg-emerald-950/30 border-emerald-500/40 ring-1 ring-emerald-500/30'
                           : game.bet_result === 'loss'
                           ? 'bg-red-950/20 border-red-500/30'
@@ -323,15 +384,32 @@ export default function CbbPage() {
                         )}
                       </div>
                       {isCompleted && game.bet_result && (
-                        <span className={`text-xs font-bold px-2 py-0.5 rounded ${
-                          game.bet_result === 'win'
-                            ? 'bg-emerald-500/20 text-emerald-400'
-                            : game.bet_result === 'loss'
-                            ? 'bg-red-500/20 text-red-400'
-                            : 'bg-zinc-700 text-zinc-400'
-                        }`}>
-                          {game.bet_result.toUpperCase()}
-                        </span>
+                        <div className="flex items-center gap-1">
+                          {isTrackedOnly && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400">
+                              TRACKED
+                            </span>
+                          )}
+                          {/* Show edge size for tracked games */}
+                          {isTrackedOnly && absEdge !== null && (
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">
+                              +{absEdge.toFixed(1)}
+                            </span>
+                          )}
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded ${
+                            isTrackedOnly
+                              ? game.bet_result === 'win'
+                                ? 'bg-purple-500/20 text-purple-300'
+                                : 'bg-purple-500/10 text-purple-400'
+                              : game.bet_result === 'win'
+                              ? 'bg-emerald-500/20 text-emerald-400'
+                              : game.bet_result === 'loss'
+                              ? 'bg-red-500/20 text-red-400'
+                              : 'bg-zinc-700 text-zinc-400'
+                          }`}>
+                            {game.bet_result.toUpperCase()}
+                          </span>
+                        </div>
                       )}
                       {!isCompleted && absEdge !== null && absEdge >= 2.5 && (
                         <span className={`text-xs font-bold px-2 py-0.5 rounded ${
