@@ -1,9 +1,12 @@
 import { supabase } from '@/lib/db/client';
+import { computeT60Projection, qualifiesForBet } from '@/lib/models/t60-ensemble-v1';
+import { isFBSGame } from '@/lib/fbs-teams';
 
 export interface SetClosingLinesResult {
   eventsProcessed: number;
   linesSet: number;
   predictionsLocked: number;
+  predictionsCalculated: number;
   skippedAlreadySet: number;
   errors: string[];
 }
@@ -22,6 +25,7 @@ export async function setClosingLines(): Promise<SetClosingLinesResult> {
     eventsProcessed: 0,
     linesSet: 0,
     predictionsLocked: 0,
+    predictionsCalculated: 0,
     skippedAlreadySet: 0,
     errors: [],
   };
@@ -183,15 +187,67 @@ async function setClosingLineForMarket(
 }
 
 /**
+ * Get team ratings for T-60 model calculation
+ */
+async function getTeamRatings(
+  teamId: string,
+  season: number
+): Promise<{
+  elo: number;
+  spOverall: number;
+  offPPA: number;
+  defPPA: number;
+} | null> {
+  const { data: eloData } = await supabase
+    .from('team_elo_snapshots')
+    .select('elo')
+    .eq('team_id', teamId)
+    .eq('season', season)
+    .order('week', { ascending: false })
+    .limit(1)
+    .single();
+
+  const { data: ratingsData } = await supabase
+    .from('advanced_team_ratings')
+    .select('sp_overall, off_ppa, def_ppa')
+    .eq('team_id', teamId)
+    .eq('season', season)
+    .single();
+
+  if (!eloData && !ratingsData) return null;
+
+  return {
+    elo: eloData?.elo || 1500,
+    spOverall: ratingsData?.sp_overall || 0,
+    offPPA: ratingsData?.off_ppa || 0,
+    defPPA: ratingsData?.def_ppa || 0,
+  };
+}
+
+/**
  * Lock the model prediction for an event into game_predictions table
  * This preserves what our model said at game time for historical tracking
+ *
+ * If no pre-calculated edge exists, calculates the prediction on-the-fly
+ * using the T-60 ensemble model.
  */
 async function lockGamePrediction(
   eventId: string,
   result: SetClosingLinesResult
 ): Promise<void> {
+  // Get DraftKings sportsbook ID
+  const { data: dkBook } = await supabase
+    .from('sportsbooks')
+    .select('id')
+    .eq('key', 'draftkings')
+    .single();
+
+  if (!dkBook) {
+    console.log(`[SetClosing] DraftKings sportsbook not found`);
+    return;
+  }
+
   // Get the edge (model prediction) for this event
-  // Prefer DraftKings, fall back to any available
   const { data: edges, error: edgeError } = await supabase
     .from('edges')
     .select(`
@@ -207,22 +263,149 @@ async function lockGamePrediction(
     .eq('market_type', 'spread');
 
   if (edgeError) throw edgeError;
-  if (!edges || edges.length === 0) {
-    console.log(`[SetClosing] No edge found for event ${eventId}`);
+
+  // Prefer DraftKings edge, otherwise take first available
+  let edge = edges?.find(e => e.sportsbook_id === dkBook.id) || edges?.[0];
+
+  // If no edge exists, calculate on-the-fly using T-60 model
+  if (!edge) {
+    console.log(`[SetClosing] No edge found for event ${eventId}, calculating on-the-fly...`);
+
+    // Get event details with teams
+    const { data: event } = await supabase
+      .from('events')
+      .select(`
+        id,
+        commence_time,
+        home_team_id,
+        away_team_id,
+        home_team:teams!events_home_team_id_fkey(id, name),
+        away_team:teams!events_away_team_id_fkey(id, name)
+      `)
+      .eq('id', eventId)
+      .single();
+
+    if (!event) {
+      console.log(`[SetClosing] Event ${eventId} not found`);
+      return;
+    }
+
+    const homeTeam = Array.isArray(event.home_team) ? event.home_team[0] : event.home_team;
+    const awayTeam = Array.isArray(event.away_team) ? event.away_team[0] : event.away_team;
+
+    if (!homeTeam?.name || !awayTeam?.name) {
+      console.log(`[SetClosing] Missing team data for event ${eventId}`);
+      return;
+    }
+
+    // Check FBS filter
+    if (!isFBSGame(homeTeam.name, awayTeam.name)) {
+      console.log(`[SetClosing] Skipping non-FBS game: ${awayTeam.name} @ ${homeTeam.name}`);
+      return;
+    }
+
+    // Get closing line (last tick before kickoff)
+    const { data: closingTick } = await supabase
+      .from('closing_lines')
+      .select('spread_points_home, price_american')
+      .eq('event_id', eventId)
+      .eq('sportsbook_id', dkBook.id)
+      .eq('market_type', 'spread')
+      .eq('side', 'home')
+      .single();
+
+    // Or get latest tick if no closing line yet
+    let marketSpread = closingTick?.spread_points_home;
+    let priceAmerican = closingTick?.price_american;
+
+    if (marketSpread === null || marketSpread === undefined) {
+      const { data: latestTick } = await supabase
+        .from('odds_ticks')
+        .select('spread_points_home, price_american')
+        .eq('event_id', eventId)
+        .eq('sportsbook_id', dkBook.id)
+        .eq('market_type', 'spread')
+        .eq('side', 'home')
+        .order('captured_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      marketSpread = latestTick?.spread_points_home;
+      priceAmerican = latestTick?.price_american;
+    }
+
+    if (marketSpread === null || marketSpread === undefined) {
+      console.log(`[SetClosing] No spread data for event ${eventId}`);
+      return;
+    }
+
+    // Get team ratings
+    const commenceDate = new Date(event.commence_time);
+    const season = commenceDate.getMonth() === 0 ? commenceDate.getFullYear() - 1 : commenceDate.getFullYear();
+
+    const homeRatings = await getTeamRatings(homeTeam.id, season);
+    const awayRatings = await getTeamRatings(awayTeam.id, season);
+
+    if (!homeRatings || !awayRatings) {
+      console.log(`[SetClosing] Missing ratings for ${homeTeam.name} vs ${awayTeam.name}`);
+      return;
+    }
+
+    // Calculate T-60 projection
+    const projection = computeT60Projection(
+      homeRatings.elo,
+      awayRatings.elo,
+      homeRatings.spOverall,
+      awayRatings.spOverall,
+      homeRatings.offPPA,
+      homeRatings.defPPA,
+      awayRatings.offPPA,
+      awayRatings.defPPA
+    );
+
+    const betCheck = qualifiesForBet(marketSpread, projection.modelSpread, projection.modelDisagreement);
+
+    // Build edge-like object
+    let recommendedSide: string;
+    let recommendedBetLabel: string;
+
+    if (betCheck.edge > 0) {
+      recommendedSide = 'home';
+      recommendedBetLabel = `${homeTeam.name} ${marketSpread > 0 ? '+' : ''}${marketSpread}`;
+    } else if (betCheck.edge < 0) {
+      recommendedSide = 'away';
+      recommendedBetLabel = `${awayTeam.name} ${-marketSpread > 0 ? '+' : ''}${-marketSpread}`;
+    } else {
+      recommendedSide = 'none';
+      recommendedBetLabel = 'No edge';
+    }
+
+    // Insert calculated prediction
+    const { error: insertError } = await supabase
+      .from('game_predictions')
+      .insert({
+        event_id: eventId,
+        sportsbook_id: dkBook.id,
+        closing_spread_home: marketSpread,
+        closing_price_american: priceAmerican,
+        model_spread_home: projection.modelSpread,
+        edge_points: betCheck.edge,
+        recommended_side: recommendedSide,
+        recommended_bet: recommendedBetLabel,
+        locked_at: new Date().toISOString(),
+      });
+
+    if (insertError) {
+      if (insertError.code !== '23505') throw insertError;
+      return;
+    }
+
+    result.predictionsCalculated++;
+    console.log(`[SetClosing] Calculated & locked prediction for ${awayTeam.name} @ ${homeTeam.name}: ${recommendedBetLabel} (${betCheck.edge.toFixed(1)} edge)`);
     return;
   }
 
-  // Get DraftKings sportsbook ID
-  const { data: dkBook } = await supabase
-    .from('sportsbooks')
-    .select('id')
-    .eq('key', 'draftkings')
-    .single();
-
-  // Prefer DraftKings edge, otherwise take first available
-  const edge = edges.find(e => e.sportsbook_id === dkBook?.id) || edges[0];
-
-  // Get closing line for this event/sportsbook
+  // Edge exists - use it
   const { data: closingLine } = await supabase
     .from('closing_lines')
     .select('spread_points_home, price_american')
@@ -232,7 +415,6 @@ async function lockGamePrediction(
     .eq('side', 'home')
     .single();
 
-  // Insert game prediction
   const { error: insertError } = await supabase
     .from('game_predictions')
     .insert({
@@ -248,10 +430,7 @@ async function lockGamePrediction(
     });
 
   if (insertError) {
-    // Ignore unique constraint violations (already exists)
-    if (insertError.code !== '23505') {
-      throw insertError;
-    }
+    if (insertError.code !== '23505') throw insertError;
     return;
   }
 

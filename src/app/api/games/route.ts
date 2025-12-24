@@ -569,35 +569,43 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Calculate stats for qualifying bets (edge >= 2.5)
-    const completedWithBets = games.filter(g =>
+    // Calculate stats for ALL completed games with predictions (total record)
+    const allCompletedGames = games.filter(g =>
+      (g.status === 'final' || g.home_score !== null) &&
+      g.bet_result !== null
+    );
+    const allWins = allCompletedGames.filter(g => g.bet_result === 'win').length;
+    const allLosses = allCompletedGames.filter(g => g.bet_result === 'loss').length;
+    const allTotal = allWins + allLosses;
+    const allProfit = (allWins * 0.91) - allLosses;
+    const allRoi = allTotal > 0 ? allProfit / allTotal : 0;
+
+    // Calculate stats for qualifying bets (edge 2.5-5.0 - production criteria)
+    const qualifyingGames = games.filter(g =>
       (g.status === 'final' || g.home_score !== null) &&
       g.abs_edge !== null &&
       g.abs_edge >= 2.5 &&
       g.abs_edge <= 5.0 &&
       g.bet_result !== null
     );
-    const qualWins = completedWithBets.filter(g => g.bet_result === 'win').length;
-    const qualLosses = completedWithBets.filter(g => g.bet_result === 'loss').length;
+    const qualWins = qualifyingGames.filter(g => g.bet_result === 'win').length;
+    const qualLosses = qualifyingGames.filter(g => g.bet_result === 'loss').length;
     const qualTotal = qualWins + qualLosses;
     const qualProfit = (qualWins * 0.91) - qualLosses;
     const qualRoi = qualTotal > 0 ? qualProfit / qualTotal : 0;
 
-    // Calculate stats for all tracked games (edge >= 1.0)
-    const trackedGames = games.filter(g =>
-      (g.status === 'final' || g.home_score !== null) &&
-      g.abs_edge !== null &&
-      g.abs_edge >= 1.0 &&
-      g.bet_result !== null
-    );
-    const trackedWins = trackedGames.filter(g => g.bet_result === 'win').length;
-    const trackedLosses = trackedGames.filter(g => g.bet_result === 'loss').length;
-    const trackedTotal = trackedWins + trackedLosses;
-    const trackedProfit = (trackedWins * 0.91) - trackedLosses;
-    const trackedRoi = trackedTotal > 0 ? trackedProfit / trackedTotal : 0;
-
     return NextResponse.json({
       games: filteredGames,
+      // Total record - all games with predictions
+      all_stats: {
+        total: allTotal,
+        wins: allWins,
+        losses: allLosses,
+        win_rate: allTotal > 0 ? allWins / allTotal : 0,
+        profit_units: allProfit,
+        roi: allRoi,
+      },
+      // Qualifying bets - edge 2.5-5.0 (production betting criteria)
       stats: {
         total_bets: qualTotal,
         wins: qualWins,
@@ -605,14 +613,6 @@ export async function GET(request: NextRequest) {
         win_rate: qualTotal > 0 ? qualWins / qualTotal : 0,
         profit_units: qualProfit,
         roi: qualRoi,
-      },
-      tracked_stats: {
-        total_tracked: trackedTotal,
-        wins: trackedWins,
-        losses: trackedLosses,
-        win_rate: trackedTotal > 0 ? trackedWins / trackedTotal : 0,
-        profit_units: trackedProfit,
-        roi: trackedRoi,
       },
     });
   } catch (error) {
