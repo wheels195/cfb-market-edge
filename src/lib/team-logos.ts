@@ -249,6 +249,12 @@ const ESPN_TEAM_IDS: Record<string, number> = {
   'Connecticut': 41,
   'UMass': 113,
   'Massachusetts': 113,
+
+  // FCS Teams (for bowl/postseason matchups)
+  'Illinois State': 2287,
+  'Illinois State Redbirds': 2287,
+  'Montana State': 149,
+  'Montana State Bobcats': 149,
 };
 
 // Default fallback - returns a generic football icon
