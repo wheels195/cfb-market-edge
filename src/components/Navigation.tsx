@@ -22,7 +22,7 @@ export function Navigation() {
         <div className="flex items-center justify-between h-14">
           <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
             <span className="font-mono text-xl font-bold text-white tracking-tight">
-              Whodl
+              Whodl Bets
             </span>
           </Link>
           <div className="flex items-center space-x-1">

@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Whodl - Quantitative Sports Betting",
+  title: "Whodl Bets - Quantitative Sports Betting",
   description: "Data-driven CFB and CBB spread predictions using ensemble models",
 };
 

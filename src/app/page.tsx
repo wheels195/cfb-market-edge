@@ -143,7 +143,7 @@ export default function HomePage() {
           <nav className="flex items-center justify-between mb-12">
             <div className="flex items-center gap-3">
               <span className="font-mono text-3xl font-bold text-white tracking-tight">
-                Whodl
+                Whodl Bets
               </span>
               <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-mono">
                 Quant Betting
@@ -501,7 +501,7 @@ export default function HomePage() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-zinc-600">
             <div className="flex items-center gap-2">
-              <span className="font-mono font-bold text-zinc-400">Whodl</span>
+              <span className="font-mono font-bold text-zinc-400">Whodl Bets</span>
               <span>•</span>
               <span>Quantitative Sports Betting</span>
             </div>
