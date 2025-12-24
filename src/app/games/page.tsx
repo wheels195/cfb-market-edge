@@ -222,7 +222,7 @@ export default function GamesPage() {
       </div>
 
       {/* Filter Tabs */}
-      <div className="border-b border-zinc-800/50 bg-[#0a0a0a] sticky top-14 z-10">
+      <div className="border-b border-zinc-800/50 bg-[#0a0a0a]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-1 py-3">
             {(['all', 'upcoming', 'completed', 'tracked'] as const).map(f => (
