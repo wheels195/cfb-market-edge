@@ -205,30 +205,21 @@ export default function GamesPage() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
-      {/* Header */}
-      <header className="bg-[#0f0f0f] border-b border-zinc-800/50 sticky top-0 z-20">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-14">
-            <div className="flex items-center gap-6">
-              <Link href="/" className="text-xl font-bold text-white tracking-tight hover:text-emerald-400 transition-colors">
-                CFB Edge
-              </Link>
-              <nav className="hidden sm:flex items-center gap-4">
-                <Link href="/games" className="text-sm font-medium text-white">
-                  View All Games
-                </Link>
-                <Link href="/model" className="text-sm font-medium text-zinc-400 hover:text-white transition-colors">
-                  Our Model
-                </Link>
-              </nav>
+      {/* Page Title */}
+      <div className="bg-[#0a0a0a] border-b border-zinc-800/50">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-8 bg-gradient-to-b from-emerald-400 to-emerald-600 rounded-full" />
+              <h1 className="text-lg font-bold text-white">College Football</h1>
             </div>
             <div className="flex items-center gap-2 text-xs text-zinc-500">
-              <span className="hidden sm:inline">Bowl Season {new Date().getFullYear()}</span>
+              <span>Bowl Season {new Date().getFullYear()}</span>
               <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
             </div>
           </div>
         </div>
-      </header>
+      </div>
 
       {/* Filter Tabs */}
       <div className="border-b border-zinc-800/50 bg-[#0a0a0a] sticky top-14 z-10">

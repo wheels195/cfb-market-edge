@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CFB Edge - College Football Betting Intelligence",
-  description: "Find edges in college football spreads with Elo-based model projections",
+  title: "Whodl - Quantitative Sports Betting",
+  description: "Data-driven CFB and CBB spread predictions using ensemble models",
 };
 
 export default function RootLayout({
