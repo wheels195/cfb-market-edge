@@ -21,7 +21,7 @@ export function Navigation() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-14">
           <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-            <span className="text-xl font-medium text-white tracking-tight" style={{ fontFamily: 'var(--font-doto), monospace' }}>
+            <span className="text-xl font-medium text-white tracking-tight" style={{ fontFamily: 'var(--font-ubuntu-mono), monospace' }}>
               Whodl Bets
             </span>
           </Link>

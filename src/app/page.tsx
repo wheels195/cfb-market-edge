@@ -147,10 +147,10 @@ export default function HomePage() {
           {/* Nav */}
           <nav className="flex items-center justify-between mb-12">
             <div className="flex items-center gap-3">
-              <span className="text-3xl font-medium text-white tracking-tight" style={{ fontFamily: 'var(--font-doto), monospace' }}>
+              <span className="text-3xl font-medium text-white tracking-tight" style={{ fontFamily: 'var(--font-ubuntu-mono), monospace' }}>
                 Whodl Bets
               </span>
-              <span className="text-[10px] text-zinc-500 uppercase tracking-widest" style={{ fontFamily: 'var(--font-doto), monospace' }}>
+              <span className="text-[10px] text-zinc-500 uppercase tracking-widest" style={{ fontFamily: 'var(--font-ubuntu-mono), monospace' }}>
                 Quant Betting
               </span>
             </div>
@@ -173,23 +173,23 @@ export default function HomePage() {
           {/* Stats Summary */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-xl p-4">
-              <div className="text-xs text-zinc-500 uppercase tracking-wider mb-1" style={{ fontFamily: 'var(--font-doto), monospace' }}>CFB Model</div>
-              <div className="text-xl font-medium text-white" style={{ fontFamily: 'var(--font-doto), monospace' }}>T-60</div>
+              <div className="text-xs text-zinc-500 uppercase tracking-wider mb-1" style={{ fontFamily: 'var(--font-ubuntu-mono), monospace' }}>CFB Model</div>
+              <div className="text-xl font-medium text-white" style={{ fontFamily: 'var(--font-ubuntu-mono), monospace' }}>T-60</div>
               <div className="text-xs text-emerald-400">+20.6% ROI</div>
             </div>
             <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-xl p-4">
-              <div className="text-xs text-zinc-500 uppercase tracking-wider mb-1" style={{ fontFamily: 'var(--font-doto), monospace' }}>CBB Model</div>
-              <div className="text-xl font-medium text-white" style={{ fontFamily: 'var(--font-doto), monospace' }}>Conf-Aware</div>
+              <div className="text-xs text-zinc-500 uppercase tracking-wider mb-1" style={{ fontFamily: 'var(--font-ubuntu-mono), monospace' }}>CBB Model</div>
+              <div className="text-xl font-medium text-white" style={{ fontFamily: 'var(--font-ubuntu-mono), monospace' }}>Conf-Aware</div>
               <div className="text-xs text-emerald-400">+6.8% ROI</div>
             </div>
             <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-xl p-4">
-              <div className="text-xs text-zinc-500 uppercase tracking-wider mb-1" style={{ fontFamily: 'var(--font-doto), monospace' }}>CFB Edges</div>
-              <div className="text-xl font-medium text-emerald-400" style={{ fontFamily: 'var(--font-doto), monospace' }}>{topCfbEdges.length}</div>
+              <div className="text-xs text-zinc-500 uppercase tracking-wider mb-1" style={{ fontFamily: 'var(--font-ubuntu-mono), monospace' }}>CFB Edges</div>
+              <div className="text-xl font-medium text-emerald-400" style={{ fontFamily: 'var(--font-ubuntu-mono), monospace' }}>{topCfbEdges.length}</div>
               <div className="text-xs text-zinc-500">Qualifying bets</div>
             </div>
             <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-xl p-4">
-              <div className="text-xs text-zinc-500 uppercase tracking-wider mb-1" style={{ fontFamily: 'var(--font-doto), monospace' }}>CBB Edges</div>
-              <div className="text-xl font-medium text-emerald-400" style={{ fontFamily: 'var(--font-doto), monospace' }}>{topCbbEdges.length}</div>
+              <div className="text-xs text-zinc-500 uppercase tracking-wider mb-1" style={{ fontFamily: 'var(--font-ubuntu-mono), monospace' }}>CBB Edges</div>
+              <div className="text-xl font-medium text-emerald-400" style={{ fontFamily: 'var(--font-ubuntu-mono), monospace' }}>{topCbbEdges.length}</div>
               <div className="text-xs text-zinc-500">Qualifying bets</div>
             </div>
           </div>
@@ -749,11 +749,11 @@ export default function HomePage() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-zinc-600">
             <div className="flex items-center gap-2">
-              <span className="font-medium text-zinc-400" style={{ fontFamily: 'var(--font-doto), monospace' }}>Whodl Bets</span>
+              <span className="font-medium text-zinc-400" style={{ fontFamily: 'var(--font-ubuntu-mono), monospace' }}>Whodl Bets</span>
               <span>•</span>
               <span>Quantitative Sports Betting</span>
             </div>
-            <div className="text-xs" style={{ fontFamily: 'var(--font-doto), monospace' }}>Updated every 15 min</div>
+            <div className="text-xs" style={{ fontFamily: 'var(--font-ubuntu-mono), monospace' }}>Updated every 15 min</div>
           </div>
         </div>
       </footer>
