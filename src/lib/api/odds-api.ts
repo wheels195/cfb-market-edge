@@ -12,29 +12,14 @@ const SPORT_KEY = 'americanfootball_ncaaf';
 const REGIONS = 'us,us2';  // Include us2 for more books
 const ODDS_FORMAT = 'american';
 
-// All available US sportsbooks - ordered by sharpness/importance
-// Pinnacle and LowVig are sharp books used as market benchmarks
-const TARGET_BOOKMAKERS = [
-  'pinnacle',      // Sharp benchmark - the gold standard
-  'lowvig',        // Another sharp book
-  'draftkings',    // Major retail
-  'fanduel',       // Major retail
-  'betmgm',        // Major retail
-  'espnbet',       // ESPN Bet
-  'betrivers',     // BetRivers
-  'bovada',        // Bovada
-  'betonlineag',   // BetOnline
-  'hardrockbet',   // Hard Rock
-  'ballybet',      // Bally
-  'betparx',       // BetParx
-  'fliff',         // Fliff
-];
+// Only use DraftKings for CFB
+const TARGET_BOOKMAKERS = ['draftkings'];
 
-// Sharp books used for CLV benchmark
-export const SHARP_BOOKMAKERS = ['pinnacle', 'lowvig'];
+// Sharp books used for CLV benchmark (kept for reference but not actively used)
+export const SHARP_BOOKMAKERS = ['pinnacle'];
 
-// Primary retail books for betting recommendations
-export const PRIMARY_BOOKMAKERS = ['draftkings', 'fanduel', 'betmgm', 'espnbet'];
+// Primary retail book
+export const PRIMARY_BOOKMAKERS = ['draftkings'];
 
 export class OddsApiClient {
   private apiKey: string;

@@ -8,7 +8,7 @@ const supabase = createClient(
 );
 
 // Only use reliable sportsbooks - matches materialize-edges-v2.ts
-const ALLOWED_SPORTSBOOKS = ['draftkings', 'bovada'];
+const ALLOWED_SPORTSBOOKS = ['draftkings'];
 
 interface RecommendedBet {
   event_id: string;

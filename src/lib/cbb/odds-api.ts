@@ -17,14 +17,8 @@ const SPORT_KEY = 'basketball_ncaab';  // CBB sport key
 const REGIONS = 'us,us2';
 const ODDS_FORMAT = 'american';
 
-// Primary bookmakers for CBB
-const TARGET_BOOKMAKERS = [
-  'draftkings',
-  'fanduel',
-  'betmgm',
-  'pinnacle',
-  'bovada',
-];
+// Only use DraftKings for CBB
+const TARGET_BOOKMAKERS = ['draftkings'];
 
 export class CbbOddsApiClient {
   private apiKey: string;

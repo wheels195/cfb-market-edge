@@ -38,7 +38,7 @@ const OUTLIER_CONFIG = {
 };
 
 // Only use reliable sportsbooks for edge calculation
-const ALLOWED_SPORTSBOOKS = ['draftkings', 'bovada'];
+const ALLOWED_SPORTSBOOKS = ['draftkings'];
 
 export interface MaterializeEdgesV2Result {
   edgesCreated: number;

@@ -11,7 +11,7 @@ const CFBD_API_KEY = process.env.CFBD_API_KEY;
 const CFBD_BASE_URL = 'https://apinext.collegefootballdata.com';
 
 // Only use reliable sportsbooks
-const ALLOWED_SPORTSBOOKS = ['draftkings', 'bovada'];
+const ALLOWED_SPORTSBOOKS = ['draftkings'];
 
 // Cache for rankings (5 minute TTL)
 let rankingsCache: { data: Map<number, number>; timestamp: number } | null = null;
@@ -503,7 +503,6 @@ export async function GET(request: NextRequest) {
 
       // Format sportsbook name for display
       const sportsbookDisplay = edge?.sportsbook_key === 'draftkings' ? 'DK' :
-                                edge?.sportsbook_key === 'bovada' ? 'Bovada' :
                                 edge?.sportsbook_key || null;
 
       return {
