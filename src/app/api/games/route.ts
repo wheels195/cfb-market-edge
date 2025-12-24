@@ -257,17 +257,20 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Get latest odds_ticks for current prices (for upcoming games)
-    // We need both home and away prices from the most recent tick
-    const { data: oddsTicks } = await supabase
+    // Get DraftKings sportsbook ID for price display (primary book)
+    const dkSportsbook = sportsbooks?.find(s => s.key === 'draftkings');
+    const dkId = dkSportsbook?.id;
+
+    // Get latest odds_ticks for current prices (DraftKings only for consistency)
+    const { data: oddsTicks } = dkId ? await supabase
       .from('odds_ticks')
       .select('event_id, sportsbook_id, side, spread_points_home, price_american, captured_at')
       .in('event_id', eventIds)
-      .in('sportsbook_id', sportsbookIds)
+      .eq('sportsbook_id', dkId)
       .eq('market_type', 'spread')
-      .order('captured_at', { ascending: false });
+      .order('captured_at', { ascending: false }) : { data: null };
 
-    // Create map of event_id -> { home_price, away_price } from latest ticks
+    // Create map of event_id -> { home_price, away_price } from latest DK ticks
     const latestPricesByEvent = new Map<string, { home_price: number | null; away_price: number | null }>();
     for (const tick of (oddsTicks || []) as OddsTickData[]) {
       if (!latestPricesByEvent.has(tick.event_id)) {
