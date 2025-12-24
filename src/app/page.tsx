@@ -84,6 +84,11 @@ function formatGameTime(dateStr: string): string {
   return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
+function formatOdds(price: number | null): string {
+  if (!price) return '-110';
+  return price > 0 ? `+${price}` : `${price}`;
+}
+
 export default function HomePage() {
   const [cfbGames, setCfbGames] = useState<CfbGame[]>([]);
   const [cbbGames, setCbbGames] = useState<CbbGame[]>([]);
@@ -142,10 +147,10 @@ export default function HomePage() {
           {/* Nav */}
           <nav className="flex items-center justify-between mb-12">
             <div className="flex items-center gap-3">
-              <span className="text-3xl font-bold text-white tracking-tight" style={{ fontFamily: 'var(--font-geist-mono), ui-monospace, monospace' }}>
+              <span className="text-3xl font-medium text-white tracking-tight" style={{ fontFamily: 'var(--font-dm-mono), monospace' }}>
                 Whodl Bets
               </span>
-              <span className="text-[10px] text-zinc-500 uppercase tracking-widest" style={{ fontFamily: 'var(--font-geist-mono), ui-monospace, monospace' }}>
+              <span className="text-[10px] text-zinc-500 uppercase tracking-widest" style={{ fontFamily: 'var(--font-dm-mono), monospace' }}>
                 Quant Betting
               </span>
             </div>
@@ -168,23 +173,23 @@ export default function HomePage() {
           {/* Stats Summary */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-xl p-4">
-              <div className="text-xs text-zinc-500 uppercase tracking-wider mb-1" style={{ fontFamily: 'var(--font-geist-mono), ui-monospace, monospace' }}>CFB Model</div>
-              <div className="text-xl font-bold text-white" style={{ fontFamily: 'var(--font-geist-mono), ui-monospace, monospace' }}>T-60</div>
+              <div className="text-xs text-zinc-500 uppercase tracking-wider mb-1" style={{ fontFamily: 'var(--font-dm-mono), monospace' }}>CFB Model</div>
+              <div className="text-xl font-medium text-white" style={{ fontFamily: 'var(--font-dm-mono), monospace' }}>T-60</div>
               <div className="text-xs text-emerald-400">+20.6% ROI</div>
             </div>
             <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-xl p-4">
-              <div className="text-xs text-zinc-500 uppercase tracking-wider mb-1" style={{ fontFamily: 'var(--font-geist-mono), ui-monospace, monospace' }}>CBB Model</div>
-              <div className="text-xl font-bold text-white" style={{ fontFamily: 'var(--font-geist-mono), ui-monospace, monospace' }}>Conf-Aware</div>
+              <div className="text-xs text-zinc-500 uppercase tracking-wider mb-1" style={{ fontFamily: 'var(--font-dm-mono), monospace' }}>CBB Model</div>
+              <div className="text-xl font-medium text-white" style={{ fontFamily: 'var(--font-dm-mono), monospace' }}>Conf-Aware</div>
               <div className="text-xs text-emerald-400">+6.8% ROI</div>
             </div>
             <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-xl p-4">
-              <div className="text-xs text-zinc-500 uppercase tracking-wider mb-1" style={{ fontFamily: 'var(--font-geist-mono), ui-monospace, monospace' }}>CFB Edges</div>
-              <div className="text-xl font-bold text-emerald-400" style={{ fontFamily: 'var(--font-geist-mono), ui-monospace, monospace' }}>{topCfbEdges.length}</div>
+              <div className="text-xs text-zinc-500 uppercase tracking-wider mb-1" style={{ fontFamily: 'var(--font-dm-mono), monospace' }}>CFB Edges</div>
+              <div className="text-xl font-medium text-emerald-400" style={{ fontFamily: 'var(--font-dm-mono), monospace' }}>{topCfbEdges.length}</div>
               <div className="text-xs text-zinc-500">Qualifying bets</div>
             </div>
             <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-xl p-4">
-              <div className="text-xs text-zinc-500 uppercase tracking-wider mb-1" style={{ fontFamily: 'var(--font-geist-mono), ui-monospace, monospace' }}>CBB Edges</div>
-              <div className="text-xl font-bold text-emerald-400" style={{ fontFamily: 'var(--font-geist-mono), ui-monospace, monospace' }}>{topCbbEdges.length}</div>
+              <div className="text-xs text-zinc-500 uppercase tracking-wider mb-1" style={{ fontFamily: 'var(--font-dm-mono), monospace' }}>CBB Edges</div>
+              <div className="text-xl font-medium text-emerald-400" style={{ fontFamily: 'var(--font-dm-mono), monospace' }}>{topCbbEdges.length}</div>
               <div className="text-xs text-zinc-500">Qualifying bets</div>
             </div>
           </div>
@@ -404,13 +409,14 @@ export default function HomePage() {
 
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {cfbGames.slice(0, 6).map((game) => {
-                const hasEdge = game.abs_edge !== null && game.abs_edge >= 1.5;
-                const strongEdge = game.abs_edge !== null && game.abs_edge >= 2.5 && game.abs_edge <= 5;
+                const absEdge = game.abs_edge;
+                const hasEdge = absEdge !== null && absEdge >= 1.5;
+                const strongEdge = absEdge !== null && absEdge >= 2.5;
 
                 return (
                   <div
                     key={game.event_id}
-                    className={`rounded-xl border overflow-hidden ${
+                    className={`rounded-xl border overflow-hidden transition-all hover:border-zinc-600 ${
                       strongEdge
                         ? 'bg-gradient-to-br from-emerald-950/40 to-[#111] border-2 border-emerald-500/50'
                         : hasEdge
@@ -418,18 +424,18 @@ export default function HomePage() {
                         : 'bg-zinc-900/50 border-zinc-700/40'
                     }`}
                   >
-                    {/* Header */}
+                    {/* Game Header */}
                     <div className="px-4 py-3 flex items-center justify-between border-b border-zinc-800/50">
                       <span className="text-xs font-medium text-zinc-400">
                         {formatGameTime(game.commence_time)}
                       </span>
-                      {strongEdge ? (
-                        <span className="text-xs font-bold px-2 py-0.5 rounded bg-emerald-500 text-black">
-                          +{game.abs_edge?.toFixed(1)} EDGE
-                        </span>
-                      ) : hasEdge ? (
-                        <span className="text-xs font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400">
-                          +{game.abs_edge?.toFixed(1)} EDGE
+                      {absEdge !== null && absEdge >= 1.5 ? (
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded ${
+                          absEdge >= 2.5
+                            ? 'bg-emerald-500 text-black'
+                            : 'bg-emerald-500/20 text-emerald-400'
+                        }`}>
+                          +{absEdge.toFixed(1)} EDGE
                         </span>
                       ) : (
                         <span className="text-xs font-medium px-2 py-0.5 rounded bg-zinc-700/50 text-zinc-400">
@@ -438,69 +444,125 @@ export default function HomePage() {
                       )}
                     </div>
 
-                    {/* Teams */}
+                    {/* Teams & Score */}
                     <div className="p-4">
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="w-10 h-10 rounded-lg bg-zinc-800/50 p-1">
-                          <img src={getTeamLogo(game.away_team)} alt="" className="w-full h-full object-contain" />
-                        </div>
-                        <div>
-                          {game.away_rank && <span className="text-xs font-medium text-amber-500">#{game.away_rank} </span>}
-                          <span className="font-semibold text-white">{getShortName(game.away_team)}</span>
-                          <span className="text-xs text-zinc-600 ml-2">Away</span>
+                      {/* Away Team Row */}
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div className="w-10 h-10 rounded-lg bg-zinc-800/50 p-1 flex-shrink-0">
+                            <img src={getTeamLogo(game.away_team)} alt="" className="w-full h-full object-contain" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              {game.away_rank && (
+                                <span className="text-xs font-medium text-amber-500">#{game.away_rank}</span>
+                              )}
+                              <span className="font-semibold text-white truncate">
+                                {getShortName(game.away_team)}
+                              </span>
+                            </div>
+                            <span className="text-xs text-zinc-600">Away</span>
+                          </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-zinc-800/50 p-1">
-                          <img src={getTeamLogo(game.home_team)} alt="" className="w-full h-full object-contain" />
-                        </div>
-                        <div>
-                          {game.home_rank && <span className="text-xs font-medium text-amber-500">#{game.home_rank} </span>}
-                          <span className="font-semibold text-white">{getShortName(game.home_team)}</span>
-                          <span className="text-xs text-zinc-600 ml-2">Home</span>
+
+                      {/* Home Team Row */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div className="w-10 h-10 rounded-lg bg-zinc-800/50 p-1 flex-shrink-0">
+                            <img src={getTeamLogo(game.home_team)} alt="" className="w-full h-full object-contain" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              {game.home_rank && (
+                                <span className="text-xs font-medium text-amber-500">#{game.home_rank}</span>
+                              )}
+                              <span className="font-semibold text-white truncate">
+                                {getShortName(game.home_team)}
+                              </span>
+                            </div>
+                            <span className="text-xs text-zinc-600">Home</span>
+                          </div>
                         </div>
                       </div>
                     </div>
 
-                    {/* Lines */}
-                    {game.market_spread_home !== null ? (
-                      <div className="border-t border-zinc-800/50 bg-zinc-900/30 p-3">
-                        <div className="space-y-2 mb-3">
-                          <div className={`flex items-center justify-between px-3 py-2 rounded-lg ${
-                            game.side === 'away' && hasEdge ? 'bg-blue-500/15 border border-blue-500/40' : 'bg-zinc-800/50'
-                          }`}>
-                            <span className="text-sm text-zinc-200">{getShortName(game.away_team)}</span>
-                            <span className={`font-mono text-sm ${game.side === 'away' && hasEdge ? 'text-blue-400 font-bold' : 'text-zinc-400'}`}>
-                              {formatSpread(-(game.market_spread_home || 0))} (-110)
-                            </span>
-                          </div>
-                          <div className={`flex items-center justify-between px-3 py-2 rounded-lg ${
-                            game.side === 'home' && hasEdge ? 'bg-blue-500/15 border border-blue-500/40' : 'bg-zinc-800/50'
-                          }`}>
-                            <span className="text-sm text-zinc-200">{getShortName(game.home_team)}</span>
-                            <span className={`font-mono text-sm ${game.side === 'home' && hasEdge ? 'text-blue-400 font-bold' : 'text-zinc-400'}`}>
-                              {formatSpread(game.market_spread_home || 0)} (-110)
-                            </span>
-                          </div>
-                        </div>
-                        {strongEdge && game.recommended_bet ? (
-                          <div className="flex items-center justify-between pt-2 border-t border-zinc-800/50">
-                            <span className="text-zinc-500 text-xs">via DK</span>
-                            <div className="font-bold text-sm px-3 py-1 rounded bg-emerald-500 text-black">
-                              BET: {game.recommended_bet}
+                    {/* Sportsbook-style Lines */}
+                    <div className="border-t border-zinc-800/50 bg-zinc-900/30 p-3">
+                      {game.market_spread_home !== null ? (
+                        <>
+                          {/* Two team lines */}
+                          <div className="space-y-2 mb-3">
+                            {/* Away team line */}
+                            <div className={`flex items-center justify-between px-3 py-2 rounded-lg ${
+                              game.side === 'away' && hasEdge ? 'bg-blue-500/15 border border-blue-500/40' : 'bg-zinc-800/50'
+                            }`}>
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded bg-zinc-700/50 p-0.5">
+                                  <img src={getTeamLogo(game.away_team)} alt="" className="w-full h-full object-contain" />
+                                </div>
+                                <span className="text-sm text-zinc-200">{getShortName(game.away_team)}</span>
+                              </div>
+                              <span className={`font-mono text-sm ${
+                                game.side === 'away' && hasEdge ? 'text-blue-400 font-bold' : 'text-zinc-400'
+                              }`}>
+                                {formatSpread(-(game.market_spread_home || 0))} ({formatOdds(game.spread_price_away)})
+                              </span>
+                            </div>
+                            {/* Home team line */}
+                            <div className={`flex items-center justify-between px-3 py-2 rounded-lg ${
+                              game.side === 'home' && hasEdge ? 'bg-blue-500/15 border border-blue-500/40' : 'bg-zinc-800/50'
+                            }`}>
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded bg-zinc-700/50 p-0.5">
+                                  <img src={getTeamLogo(game.home_team)} alt="" className="w-full h-full object-contain" />
+                                </div>
+                                <span className="text-sm text-zinc-200">{getShortName(game.home_team)}</span>
+                              </div>
+                              <span className={`font-mono text-sm ${
+                                game.side === 'home' && hasEdge ? 'text-blue-400 font-bold' : 'text-zinc-400'
+                              }`}>
+                                {formatSpread(game.market_spread_home || 0)} ({formatOdds(game.spread_price_home)})
+                              </span>
                             </div>
                           </div>
-                        ) : !hasEdge && (
-                          <div className="text-xs text-zinc-500 text-center pt-2 border-t border-zinc-800/50">
-                            Model agrees with market
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="border-t border-zinc-800/50 bg-zinc-900/30 p-3 text-center">
-                        <span className="text-xs text-zinc-600">No odds available</span>
-                      </div>
-                    )}
+
+                          {/* Model prediction and bet */}
+                          {hasEdge && game.recommended_bet ? (
+                            <div className="pt-2 border-t border-zinc-800/50">
+                              {/* Model prediction */}
+                              {game.model_spread_home !== null && (
+                                <div className="flex items-center justify-between mb-2 text-xs">
+                                  <span className="text-zinc-500">Model:</span>
+                                  <span className="text-blue-400 font-medium">
+                                    {game.model_spread_home <= 0
+                                      ? `${getShortName(game.home_team)} ${formatSpread(game.model_spread_home)}`
+                                      : `${getShortName(game.away_team)} ${formatSpread(-game.model_spread_home)}`
+                                    }
+                                  </span>
+                                </div>
+                              )}
+                              <div className="flex items-center justify-between">
+                                <span className="text-zinc-500 text-xs">via DK</span>
+                                <div className={`font-bold text-sm px-3 py-1 rounded ${
+                                  strongEdge ? 'bg-emerald-500 text-black' : 'bg-emerald-500/20 text-emerald-400'
+                                }`}>
+                                  BET: {game.recommended_bet}
+                                </div>
+                              </div>
+                            </div>
+                          ) : !hasEdge && (
+                            <div className="pt-2 border-t border-zinc-800/50 text-center">
+                              <span className="text-xs text-zinc-500">Model agrees with market</span>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="text-xs text-zinc-600 text-center py-2">
+                          No odds available
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -593,50 +655,87 @@ export default function HomePage() {
                       </div>
                     </div>
 
-                    {/* Lines */}
-                    {game.market_spread !== null ? (
-                      <div className="border-t border-zinc-800/50 bg-zinc-900/30 p-3">
-                        <div className="space-y-2 mb-3">
-                          <div className={`flex items-center justify-between px-3 py-2 rounded-lg ${
-                            game.recommended_side === 'away' && hasEdge ? 'bg-blue-500/15 border border-blue-500/40' : 'bg-zinc-800/50'
-                          }`}>
-                            <span className="text-sm text-zinc-200">{getShortName(game.away_team.name)}</span>
-                            <span className={`font-mono text-sm ${game.recommended_side === 'away' && hasEdge ? 'text-blue-400 font-bold' : 'text-zinc-400'}`}>
-                              {formatSpread(-(game.market_spread || 0))} (-110)
-                            </span>
-                          </div>
-                          <div className={`flex items-center justify-between px-3 py-2 rounded-lg ${
-                            game.recommended_side === 'home' && hasEdge ? 'bg-blue-500/15 border border-blue-500/40' : 'bg-zinc-800/50'
-                          }`}>
-                            <span className="text-sm text-zinc-200">{getShortName(game.home_team.name)}</span>
-                            <span className={`font-mono text-sm ${game.recommended_side === 'home' && hasEdge ? 'text-blue-400 font-bold' : 'text-zinc-400'}`}>
-                              {formatSpread(game.market_spread || 0)} (-110)
-                            </span>
-                          </div>
-                        </div>
-                        {strongEdge ? (
-                          <div className="flex items-center justify-between pt-2 border-t border-zinc-800/50">
-                            <span className="text-zinc-500 text-xs">via DK</span>
-                            <div className={`font-bold text-sm px-3 py-1 rounded ${
-                              game.is_underdog_bet ? 'bg-amber-500 text-black' : 'bg-emerald-500 text-black'
+                    {/* Sportsbook-style Lines */}
+                    <div className="border-t border-zinc-800/50 bg-zinc-900/30 p-3">
+                      {game.market_spread !== null ? (
+                        <>
+                          {/* Two team lines */}
+                          <div className="space-y-2 mb-3">
+                            {/* Away team line */}
+                            <div className={`flex items-center justify-between px-3 py-2 rounded-lg ${
+                              game.recommended_side === 'away' && hasEdge ? 'bg-blue-500/15 border border-blue-500/40' : 'bg-zinc-800/50'
                             }`}>
-                              BET: {game.recommended_side === 'home'
-                                ? `${getShortName(game.home_team.name)} ${formatSpread(game.market_spread || 0)}`
-                                : `${getShortName(game.away_team.name)} ${formatSpread(-(game.market_spread || 0))}`
-                              }
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded bg-zinc-700/50 p-0.5">
+                                  <img src={getCbbTeamLogo(game.away_team.name)} alt="" className="w-full h-full object-contain" />
+                                </div>
+                                <span className="text-sm text-zinc-200">{getShortName(game.away_team.name)}</span>
+                              </div>
+                              <span className={`font-mono text-sm ${game.recommended_side === 'away' && hasEdge ? 'text-blue-400 font-bold' : 'text-zinc-400'}`}>
+                                {formatSpread(-(game.market_spread || 0))} (-110)
+                              </span>
+                            </div>
+                            {/* Home team line */}
+                            <div className={`flex items-center justify-between px-3 py-2 rounded-lg ${
+                              game.recommended_side === 'home' && hasEdge ? 'bg-blue-500/15 border border-blue-500/40' : 'bg-zinc-800/50'
+                            }`}>
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded bg-zinc-700/50 p-0.5">
+                                  <img src={getCbbTeamLogo(game.home_team.name)} alt="" className="w-full h-full object-contain" />
+                                </div>
+                                <span className="text-sm text-zinc-200">{getShortName(game.home_team.name)}</span>
+                              </div>
+                              <span className={`font-mono text-sm ${game.recommended_side === 'home' && hasEdge ? 'text-blue-400 font-bold' : 'text-zinc-400'}`}>
+                                {formatSpread(game.market_spread || 0)} (-110)
+                              </span>
                             </div>
                           </div>
-                        ) : !hasEdge && (
-                          <div className="text-xs text-zinc-500 text-center pt-2 border-t border-zinc-800/50">
-                            Model agrees with market
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="border-t border-zinc-800/50 bg-zinc-900/30 p-3 text-center">
-                        <span className="text-xs text-zinc-600">No odds available</span>
-                      </div>
-                    )}
+
+                          {/* Model prediction and bet */}
+                          {hasEdge && game.recommended_side ? (
+                            <div className="pt-2 border-t border-zinc-800/50">
+                              {/* Model prediction */}
+                              {game.model_spread !== null && (
+                                <div className="flex items-center justify-between mb-2 text-xs">
+                                  <span className="text-zinc-500">Model:</span>
+                                  <span className="text-blue-400 font-medium">
+                                    {game.model_spread <= 0
+                                      ? `${getShortName(game.home_team.name)} ${formatSpread(game.model_spread)}`
+                                      : `${getShortName(game.away_team.name)} ${formatSpread(-game.model_spread)}`
+                                    }
+                                  </span>
+                                </div>
+                              )}
+                              {strongEdge ? (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-zinc-500 text-xs">via DK</span>
+                                  <div className={`font-bold text-sm px-3 py-1 rounded ${
+                                    game.is_underdog_bet ? 'bg-amber-500 text-black' : 'bg-emerald-500 text-black'
+                                  }`}>
+                                    BET: {game.recommended_side === 'home'
+                                      ? `${getShortName(game.home_team.name)} ${formatSpread(game.market_spread || 0)}`
+                                      : `${getShortName(game.away_team.name)} ${formatSpread(-(game.market_spread || 0))}`
+                                    }
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="text-center">
+                                  <span className="text-xs text-zinc-500">Edge detected - watch</span>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="pt-2 border-t border-zinc-800/50 text-center">
+                              <span className="text-xs text-zinc-500">Model agrees with market</span>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="text-xs text-zinc-600 text-center py-2">
+                          No odds available
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -650,11 +749,11 @@ export default function HomePage() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-zinc-600">
             <div className="flex items-center gap-2">
-              <span className="font-bold text-zinc-400" style={{ fontFamily: 'var(--font-geist-mono), ui-monospace, monospace' }}>Whodl Bets</span>
+              <span className="font-medium text-zinc-400" style={{ fontFamily: 'var(--font-dm-mono), monospace' }}>Whodl Bets</span>
               <span>•</span>
               <span>Quantitative Sports Betting</span>
             </div>
-            <div className="text-xs" style={{ fontFamily: 'var(--font-geist-mono), ui-monospace, monospace' }}>Updated every 15 min</div>
+            <div className="text-xs" style={{ fontFamily: 'var(--font-dm-mono), monospace' }}>Updated every 15 min</div>
           </div>
         </div>
       </footer>
