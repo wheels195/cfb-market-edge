@@ -357,7 +357,8 @@ export default function GamesPage() {
                 const hasEdge = !isCompleted && absEdge !== null && absEdge >= 1.5;
                 const strongEdge = !isCompleted && absEdge !== null && absEdge >= 2.5;
                 // Tracked-only = games with edge < 2.5 (doesn't qualify for actual bet)
-                const isTrackedOnly = filter === 'tracked' && isCompleted && absEdge !== null && absEdge < 2.5;
+                // Show this distinction in both 'tracked' and 'completed' views
+                const isTrackedOnly = (filter === 'tracked' || filter === 'completed') && isCompleted && absEdge !== null && absEdge < 2.5;
 
                 return (
                   <div

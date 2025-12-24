@@ -518,11 +518,10 @@ export async function GET(request: NextRequest) {
         g.status === 'scheduled' && new Date(g.commence_time) > now
       );
     } else if (filter === 'completed') {
-      // Only show completed games with qualifying bets (edge >= 2.5)
+      // Show all completed games that have predictions (any edge size)
+      // This shows all games we tracked, not just qualifying bets
       filteredGames = filteredGames.filter(g =>
         (g.status === 'final' || g.home_score !== null) &&
-        g.abs_edge !== null &&
-        g.abs_edge >= 2.5 &&
         g.bet_result !== null
       );
     } else if (filter === 'tracked') {
