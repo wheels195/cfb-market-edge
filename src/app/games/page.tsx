@@ -46,6 +46,14 @@ interface ApiResponse {
     profit_units: number;
     roi: number;
   };
+  all_stats: {
+    total: number;
+    wins: number;
+    losses: number;
+    win_rate: number;
+    profit_units: number;
+    roi: number;
+  };
   tracked_stats: {
     total_tracked: number;
     wins: number;
@@ -153,6 +161,7 @@ function getGameStatus(game: GameData): { label: string; color: string } {
 export default function GamesPage() {
   const [games, setGames] = useState<GameData[]>([]);
   const [stats, setStats] = useState<ApiResponse['stats'] | null>(null);
+  const [allStats, setAllStats] = useState<ApiResponse['all_stats'] | null>(null);
   const [trackedStats, setTrackedStats] = useState<ApiResponse['tracked_stats'] | null>(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'upcoming' | 'completed' | 'tracked'>('all');
@@ -164,6 +173,7 @@ export default function GamesPage() {
       .then((data: ApiResponse) => {
         setGames(data.games || []);
         setStats(data.stats);
+        setAllStats(data.all_stats);
         setTrackedStats(data.tracked_stats);
         setLoading(false);
       })
@@ -245,55 +255,64 @@ export default function GamesPage() {
       </div>
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Stats - Show qualifying stats for most views, tracked stats for tracked view */}
-        {filter === 'tracked' && trackedStats && trackedStats.total_tracked > 0 ? (
-          <div className="mb-8 p-4 bg-gradient-to-r from-purple-950/40 to-zinc-900/40 rounded-xl border border-purple-500/30">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-purple-400 text-sm font-semibold">Tracked Predictions (Edge ≥ 1.0)</span>
-              <span className="text-zinc-500 text-xs">All games with model edge, for analysis</span>
-            </div>
-            <div className="flex flex-wrap items-center gap-6 text-sm">
-              <div className="flex items-center gap-2">
-                <span className="text-zinc-500">Tracked:</span>
-                <span className="text-white font-bold">{trackedStats.wins}-{trackedStats.losses}</span>
+        {/* Stats - Show both total record AND qualifying bets record */}
+        {(filter === 'completed' || filter === 'all' || filter === 'tracked') && (allStats || stats) ? (
+          <div className="mb-8 space-y-4">
+            {/* Total Record - ALL predictions */}
+            {allStats && allStats.total > 0 && (
+              <div className="p-4 bg-gradient-to-r from-blue-950/40 to-zinc-900/40 rounded-xl border border-blue-500/30">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-blue-400 text-sm font-semibold">All Predictions</span>
+                  <span className="text-zinc-500 text-xs">Every game we tracked</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-6 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="text-zinc-500">Record:</span>
+                    <span className="text-white font-bold text-lg">{allStats.wins}-{allStats.losses}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-zinc-500">Win Rate:</span>
+                    <span className={`font-bold ${allStats.win_rate >= 0.52 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {(allStats.win_rate * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-zinc-500">ROI:</span>
+                    <span className={`font-bold ${allStats.roi >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {allStats.roi >= 0 ? '+' : ''}{(allStats.roi * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-zinc-500">Win Rate:</span>
-                <span className={`font-bold ${trackedStats.win_rate >= 0.52 ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {(trackedStats.win_rate * 100).toFixed(1)}%
-                </span>
+            )}
+
+            {/* Qualifying Bets - Edge 2.5-5 */}
+            {stats && stats.total_bets > 0 && (
+              <div className="p-4 bg-gradient-to-r from-emerald-950/40 to-zinc-900/40 rounded-xl border border-emerald-500/30">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-emerald-400 text-sm font-semibold">Qualifying Bets (Edge 2.5-5 pts)</span>
+                  <span className="text-zinc-500 text-xs">Production betting criteria</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-6 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="text-zinc-500">Record:</span>
+                    <span className="text-white font-bold text-lg">{stats.wins}-{stats.losses}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-zinc-500">Win Rate:</span>
+                    <span className={`font-bold ${stats.win_rate >= 0.52 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {(stats.win_rate * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-zinc-500">ROI:</span>
+                    <span className={`font-bold ${stats.roi >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {stats.roi >= 0 ? '+' : ''}{(stats.roi * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-zinc-500">ROI:</span>
-                <span className={`font-bold ${trackedStats.roi >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {trackedStats.roi >= 0 ? '+' : ''}{(trackedStats.roi * 100).toFixed(1)}%
-                </span>
-              </div>
-            </div>
-          </div>
-        ) : (filter === 'completed' || filter === 'all') && stats && stats.total_bets > 0 ? (
-          <div className="mb-8 p-4 bg-gradient-to-r from-zinc-900/80 to-zinc-900/40 rounded-xl border border-zinc-800/50">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-emerald-400 text-sm font-semibold">Qualifying Bets (Edge 2.5-5 pts)</span>
-            </div>
-            <div className="flex flex-wrap items-center gap-6 text-sm">
-              <div className="flex items-center gap-2">
-                <span className="text-zinc-500">Record:</span>
-                <span className="text-white font-bold">{stats.wins}-{stats.losses}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-zinc-500">Win Rate:</span>
-                <span className={`font-bold ${stats.win_rate >= 0.52 ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {(stats.win_rate * 100).toFixed(1)}%
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-zinc-500">ROI:</span>
-                <span className={`font-bold ${stats.roi >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {stats.roi >= 0 ? '+' : ''}{(stats.roi * 100).toFixed(1)}%
-                </span>
-              </div>
-            </div>
+            )}
           </div>
         ) : null}
 

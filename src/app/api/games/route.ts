@@ -561,11 +561,13 @@ export async function GET(request: NextRequest) {
         g.bet_result !== null
       );
     } else if (filter === 'tracked') {
-      // Show ALL completed games with any edge >= 1.0 for analysis
+      // Show qualifying bets (edge 2.5-5.0) - the games we actually bet on
       filteredGames = filteredGames.filter(g =>
         (g.status === 'final' || g.home_score !== null) &&
         g.abs_edge !== null &&
-        g.abs_edge >= 1.0
+        g.abs_edge >= 2.5 &&
+        g.abs_edge <= 5.0 &&
+        g.bet_result !== null
       );
     }
 
@@ -596,7 +598,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       games: filteredGames,
-      // Total record - all games with predictions
+      // Total record - ALL games with predictions (for display)
       all_stats: {
         total: allTotal,
         wins: allWins,
@@ -613,6 +615,15 @@ export async function GET(request: NextRequest) {
         win_rate: qualTotal > 0 ? qualWins / qualTotal : 0,
         profit_units: qualProfit,
         roi: qualRoi,
+      },
+      // Keep tracked_stats for backward compat (same as all_stats)
+      tracked_stats: {
+        total_tracked: allTotal,
+        wins: allWins,
+        losses: allLosses,
+        win_rate: allTotal > 0 ? allWins / allTotal : 0,
+        profit_units: allProfit,
+        roi: allRoi,
       },
     });
   } catch (error) {
