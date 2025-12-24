@@ -316,42 +316,38 @@ export default function GamesPage() {
           </div>
         ) : null}
 
-        {/* Legend - show different content for tracked view */}
-        {filter === 'tracked' ? (
-          <div className="mb-8 p-4 bg-gradient-to-r from-purple-950/30 to-zinc-900/40 rounded-xl border border-purple-500/20">
-            <div className="text-sm text-zinc-400 space-y-2">
-              <p><span className="text-purple-400 font-semibold">Tracked Predictions</span> shows all completed games where the model had 1.0+ point edge, even if below the 2.5 pt betting threshold.</p>
-              <p>Use this to analyze model performance across different edge sizes for future refinement.</p>
-              <div className="flex flex-wrap gap-4 mt-3 pt-3 border-t border-zinc-800/50">
+        {/* Legend */}
+        <div className="mb-8 p-4 bg-gradient-to-r from-zinc-900/80 to-zinc-900/40 rounded-xl border border-zinc-800/50">
+          <div className="flex flex-wrap items-center gap-6 text-sm">
+            {(filter === 'completed' || filter === 'tracked') ? (
+              <>
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400">TRACKED</span>
-                  <span className="text-zinc-500">= Below 2.5 threshold (analysis only)</span>
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400">BET</span>
+                  <span className="text-zinc-400">= Qualifying bet (2.5-5 edge)</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400">WIN</span>
-                  <span className="text-zinc-500">= Qualifying bet result</span>
+                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500">0.6 edge</span>
+                  <span className="text-zinc-400">= Prediction only (not bet)</span>
                 </div>
-              </div>
-            </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-emerald-500/20 border border-emerald-500" />
+                  <span className="text-zinc-400">Market = Sportsbook line</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-blue-500/20 border border-blue-500" />
+                  <span className="text-zinc-400">Model = Our projection</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-emerald-400 font-semibold">+2.5</span>
+                  <span className="text-zinc-400">= Edge in points (bet if 2.5-5)</span>
+                </div>
+              </>
+            )}
           </div>
-        ) : (
-          <div className="mb-8 p-4 bg-gradient-to-r from-zinc-900/80 to-zinc-900/40 rounded-xl border border-zinc-800/50">
-            <div className="flex flex-wrap items-center gap-6 text-sm">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-emerald-500/20 border border-emerald-500" />
-                <span className="text-zinc-400">Market = Sportsbook line</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-blue-500/20 border border-blue-500" />
-                <span className="text-zinc-400">Model = Our projection</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-emerald-400 font-semibold">+2.5</span>
-                <span className="text-zinc-400">= Edge in points</span>
-              </div>
-            </div>
-          </div>
-        )}
+        </div>
 
         {Object.entries(gamesByDate).map(([date, dateGames]) => (
           <div key={date} className="mb-10">
@@ -375,26 +371,23 @@ export default function GamesPage() {
 
                 const hasEdge = !isCompleted && absEdge !== null && absEdge >= 1.5;
                 const strongEdge = !isCompleted && absEdge !== null && absEdge >= 2.5;
-                // Tracked-only = games with edge < 2.5 (doesn't qualify for actual bet)
-                // Show this distinction in both 'tracked' and 'completed' views
-                const isTrackedOnly = (filter === 'tracked' || filter === 'completed') && isCompleted && absEdge !== null && absEdge < 2.5;
+                // Qualifying bet = edge 2.5-5.0 (what we actually bet on)
+                const isQualifyingBet = absEdge !== null && absEdge >= 2.5 && absEdge <= 5.0;
+                // Non-qualifying = edge outside 2.5-5 range (prediction only, not a bet)
+                const isNonQualifying = absEdge !== null && (absEdge < 2.5 || absEdge > 5.0);
 
                 return (
                   <div
                     key={game.event_id}
                     className={`rounded-xl border overflow-hidden transition-all hover:border-zinc-600 ${
                       isCompleted
-                        ? isTrackedOnly
+                        ? isQualifyingBet
                           ? game.bet_result === 'win'
-                            ? 'bg-purple-950/30 border-purple-500/40 ring-1 ring-purple-500/30'
+                            ? 'bg-emerald-950/30 border-emerald-500/40 ring-1 ring-emerald-500/30'
                             : game.bet_result === 'loss'
-                            ? 'bg-purple-950/10 border-purple-500/20'
+                            ? 'bg-red-950/20 border-red-500/30'
                             : 'bg-[#111] border-zinc-800/50'
-                          : game.bet_result === 'win'
-                          ? 'bg-emerald-950/30 border-emerald-500/40 ring-1 ring-emerald-500/30'
-                          : game.bet_result === 'loss'
-                          ? 'bg-red-950/20 border-red-500/30'
-                          : 'bg-[#111] border-zinc-800/50'
+                          : 'bg-zinc-900/30 border-zinc-700/40'
                         : strongEdge
                         ? 'bg-gradient-to-br from-emerald-950/40 to-[#111] border-2 border-emerald-500/50'
                         : hasEdge
@@ -409,27 +402,28 @@ export default function GamesPage() {
                       </span>
                       {isCompleted && game.bet_result && (
                         <div className="flex items-center gap-1">
-                          {isTrackedOnly && (
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400">
-                              TRACKED
+                          {/* Show BET badge for qualifying bets, or edge size for non-qualifying */}
+                          {isQualifyingBet ? (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400">
+                              BET
                             </span>
-                          )}
-                          {/* Show edge size for tracked games */}
-                          {isTrackedOnly && absEdge !== null && (
-                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">
-                              +{absEdge.toFixed(1)}
+                          ) : absEdge !== null ? (
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500">
+                              {absEdge.toFixed(1)} edge
                             </span>
-                          )}
+                          ) : null}
                           <span className={`text-xs font-bold px-2 py-0.5 rounded ${
-                            isTrackedOnly
+                            isQualifyingBet
                               ? game.bet_result === 'win'
-                                ? 'bg-purple-500/20 text-purple-300'
-                                : 'bg-purple-500/10 text-purple-400'
+                                ? 'bg-emerald-500/20 text-emerald-400'
+                                : game.bet_result === 'loss'
+                                ? 'bg-red-500/20 text-red-400'
+                                : 'bg-zinc-700 text-zinc-400'
                               : game.bet_result === 'win'
-                              ? 'bg-emerald-500/20 text-emerald-400'
+                              ? 'bg-zinc-700 text-zinc-300'
                               : game.bet_result === 'loss'
-                              ? 'bg-red-500/20 text-red-400'
-                              : 'bg-zinc-700 text-zinc-400'
+                              ? 'bg-zinc-800 text-zinc-500'
+                              : 'bg-zinc-800 text-zinc-500'
                           }`}>
                             {game.bet_result.toUpperCase()}
                           </span>
@@ -528,7 +522,9 @@ export default function GamesPage() {
                             <div className={`flex items-center justify-between px-3 py-2 rounded-lg ${
                               game.side === 'away'
                                 ? isCompleted
-                                  ? game.bet_result === 'win' ? 'bg-emerald-500/20 border border-emerald-500/40' : 'bg-red-500/10 border border-red-500/30'
+                                  ? isQualifyingBet
+                                    ? game.bet_result === 'win' ? 'bg-emerald-500/20 border border-emerald-500/40' : 'bg-red-500/10 border border-red-500/30'
+                                    : 'bg-zinc-800/70 border border-zinc-700/50'
                                   : 'bg-blue-500/15 border border-blue-500/40'
                                 : 'bg-zinc-800/50'
                             }`}>
@@ -541,7 +537,9 @@ export default function GamesPage() {
                               <span className={`font-mono text-sm ${
                                 game.side === 'away'
                                   ? isCompleted
-                                    ? game.bet_result === 'win' ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold'
+                                    ? isQualifyingBet
+                                      ? game.bet_result === 'win' ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold'
+                                      : 'text-zinc-400 font-medium'
                                     : 'text-blue-400 font-bold'
                                   : 'text-zinc-400'
                               }`}>
@@ -552,7 +550,9 @@ export default function GamesPage() {
                             <div className={`flex items-center justify-between px-3 py-2 rounded-lg ${
                               game.side === 'home'
                                 ? isCompleted
-                                  ? game.bet_result === 'win' ? 'bg-emerald-500/20 border border-emerald-500/40' : 'bg-red-500/10 border border-red-500/30'
+                                  ? isQualifyingBet
+                                    ? game.bet_result === 'win' ? 'bg-emerald-500/20 border border-emerald-500/40' : 'bg-red-500/10 border border-red-500/30'
+                                    : 'bg-zinc-800/70 border border-zinc-700/50'
                                   : 'bg-blue-500/15 border border-blue-500/40'
                                 : 'bg-zinc-800/50'
                             }`}>
@@ -565,7 +565,9 @@ export default function GamesPage() {
                               <span className={`font-mono text-sm ${
                                 game.side === 'home'
                                   ? isCompleted
-                                    ? game.bet_result === 'win' ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold'
+                                    ? isQualifyingBet
+                                      ? game.bet_result === 'win' ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold'
+                                      : 'text-zinc-400 font-medium'
                                     : 'text-blue-400 font-bold'
                                   : 'text-zinc-400'
                               }`}>
@@ -591,15 +593,21 @@ export default function GamesPage() {
                               )}
                               <div className="flex items-center justify-between">
                                 <div>
-                                  <span className="text-[10px] uppercase tracking-wider text-zinc-500">Picked:</span>
+                                  <span className="text-[10px] uppercase tracking-wider text-zinc-500">
+                                    {isQualifyingBet ? 'Bet:' : 'Predicted:'}
+                                  </span>
                                   <span className={`ml-2 text-sm font-bold ${
-                                    game.bet_result === 'win' ? 'text-emerald-400' : game.bet_result === 'loss' ? 'text-red-400' : 'text-zinc-400'
+                                    isQualifyingBet
+                                      ? game.bet_result === 'win' ? 'text-emerald-400' : game.bet_result === 'loss' ? 'text-red-400' : 'text-zinc-400'
+                                      : 'text-zinc-400'
                                   }`}>
                                     {game.recommended_bet}
                                   </span>
                                 </div>
                                 {absEdge !== null && (
-                                  <span className="text-sm text-zinc-500">+{absEdge.toFixed(1)} edge</span>
+                                  <span className={`text-sm ${isQualifyingBet ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                                    {absEdge.toFixed(1)} edge
+                                  </span>
                                 )}
                               </div>
                             </div>
