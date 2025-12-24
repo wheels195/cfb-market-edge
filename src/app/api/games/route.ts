@@ -93,6 +93,15 @@ interface EdgeData {
   edge_points: number | null;
 }
 
+interface OddsTickData {
+  event_id: string;
+  sportsbook_id: string;
+  side: string;
+  spread_points_home: number | null;
+  price_american: number | null;
+  captured_at: string;
+}
+
 interface ClosingLineData {
   event_id: string;
   spread_points_home: number | null;
@@ -245,6 +254,31 @@ export async function GET(request: NextRequest) {
           ...edge,
           sportsbook_key: sportsbookKeyById.get(edge.sportsbook_id) || 'unknown'
         });
+      }
+    }
+
+    // Get latest odds_ticks for current prices (for upcoming games)
+    // We need both home and away prices from the most recent tick
+    const { data: oddsTicks } = await supabase
+      .from('odds_ticks')
+      .select('event_id, sportsbook_id, side, spread_points_home, price_american, captured_at')
+      .in('event_id', eventIds)
+      .in('sportsbook_id', sportsbookIds)
+      .eq('market_type', 'spread')
+      .order('captured_at', { ascending: false });
+
+    // Create map of event_id -> { home_price, away_price } from latest ticks
+    const latestPricesByEvent = new Map<string, { home_price: number | null; away_price: number | null }>();
+    for (const tick of (oddsTicks || []) as OddsTickData[]) {
+      if (!latestPricesByEvent.has(tick.event_id)) {
+        latestPricesByEvent.set(tick.event_id, { home_price: null, away_price: null });
+      }
+      const prices = latestPricesByEvent.get(tick.event_id)!;
+      // Only use the first (most recent) tick for each side
+      if (tick.side === 'home' && prices.home_price === null) {
+        prices.home_price = tick.price_american;
+      } else if (tick.side === 'away' && prices.away_price === null) {
+        prices.away_price = tick.price_american;
       }
     }
 
@@ -479,17 +513,17 @@ export async function GET(request: NextRequest) {
         away_rank: awayRank,
         commence_time: event.commence_time,
         status: event.status || 'scheduled',
-        // Live odds
+        // Live odds - use latest tick prices for accurate current juice
         market_spread_home: edge?.market_spread_home ?? null,
         model_spread_home: modelSpreadHome,
         edge_points: edgePoints,
         abs_edge: absEdge,
         side,
-        spread_price_home: edge?.market_price_american ?? null,
-        spread_price_away: edge?.market_price_american ? -edge.market_price_american : null,
+        spread_price_home: latestPricesByEvent.get(event.id)?.home_price ?? edge?.market_price_american ?? null,
+        spread_price_away: latestPricesByEvent.get(event.id)?.away_price ?? edge?.market_price_american ?? null,
         sportsbook: sportsbookDisplay,
-        // Closing odds
-        closing_spread_home: closing?.home?.spread_points_home ?? null,
+        // Closing odds - use marketSpread for completed games (comes from locked prediction)
+        closing_spread_home: marketSpread ?? closing?.home?.spread_points_home ?? null,
         closing_price_home: closing?.home?.price_american ?? null,
         closing_price_away: closing?.away?.price_american ?? null,
         closing_model_spread: modelSpreadHome,

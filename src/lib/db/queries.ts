@@ -161,7 +161,9 @@ export async function getOddsHistory(
 }
 
 /**
- * Check if a tick already exists (for deduplication)
+ * Check if a tick already exists within time window (for deduplication)
+ * Only dedupes if matching tick exists in last 4 hours - this allows
+ * recording when a line returns to a previous price after movement
  */
 export async function tickExists(
   eventId: string,
@@ -170,6 +172,9 @@ export async function tickExists(
   side: string,
   payloadHash: string
 ): Promise<boolean> {
+  // Only check for duplicates within the last 4 hours
+  const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString();
+
   const { data, error } = await supabase
     .from('odds_ticks')
     .select('id')
@@ -178,6 +183,7 @@ export async function tickExists(
     .eq('market_type', marketType)
     .eq('side', side)
     .eq('payload_hash', payloadHash)
+    .gte('captured_at', fourHoursAgo)
     .limit(1);
 
   if (error) throw error;
