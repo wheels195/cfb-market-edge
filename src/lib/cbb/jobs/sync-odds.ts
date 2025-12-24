@@ -56,18 +56,10 @@ export async function syncCbbOdds(): Promise<CbbSyncOddsResult> {
 
     for (const event of oddsData) {
       try {
-        // Parse DraftKings odds (primary)
+        // Parse DraftKings odds ONLY (no fallback - consistent with CFB)
         const odds = client.parseOdds(event, 'draftkings');
 
-        if (odds.spread === null) {
-          // Try fallback to FanDuel
-          const fdOdds = client.parseOdds(event, 'fanduel');
-          if (fdOdds.spread !== null) {
-            odds.spread = fdOdds.spread;
-            odds.total = fdOdds.total;
-          }
-        }
-
+        // Skip events without DraftKings spread
         if (odds.spread === null) continue;
 
         const payloadHash = generateHash(event.id, 'draftkings', odds.spread, odds.total);

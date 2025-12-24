@@ -296,14 +296,21 @@ export async function GET(request: Request) {
       );
     }
 
-    // Get season stats for qualifying bets
-    const { data: stats } = await supabase
+    // Get season stats for all predictions
+    const { data: allPredictions } = await supabase
       .from('cbb_game_predictions')
       .select('bet_result, qualifies_for_bet, edge_points')
       .not('bet_result', 'is', null);
 
-    // Qualifying bets stats
-    const qualifyingStats = stats?.filter(s => s.qualifies_for_bet) || [];
+    // All predictions stats (any prediction that was graded)
+    const allWins = allPredictions?.filter(s => s.bet_result === 'win').length || 0;
+    const allLosses = allPredictions?.filter(s => s.bet_result === 'loss').length || 0;
+    const allTotal = allWins + allLosses;
+    const allProfit = (allWins * 0.91) - allLosses;
+    const allRoi = allTotal > 0 ? allProfit / allTotal : 0;
+
+    // Qualifying bets stats (meet FAV or DOG strategy criteria)
+    const qualifyingStats = allPredictions?.filter(s => s.qualifies_for_bet) || [];
     const qualWins = qualifyingStats.filter(s => s.bet_result === 'win').length;
     const qualLosses = qualifyingStats.filter(s => s.bet_result === 'loss').length;
     const qualTotal = qualWins + qualLosses;
@@ -311,7 +318,7 @@ export async function GET(request: Request) {
     const qualRoi = qualTotal > 0 ? qualProfit / qualTotal : 0;
 
     // Tracked stats (all games with edge >= 2.5, for analysis)
-    const trackedStats = stats?.filter(s => s.edge_points !== null && s.edge_points >= 2.5) || [];
+    const trackedStats = allPredictions?.filter(s => s.edge_points !== null && s.edge_points >= 2.5) || [];
     const trackedWins = trackedStats.filter(s => s.bet_result === 'win').length;
     const trackedLosses = trackedStats.filter(s => s.bet_result === 'loss').length;
     const trackedTotal = trackedWins + trackedLosses;
@@ -321,6 +328,16 @@ export async function GET(request: Request) {
     return NextResponse.json({
       games: filteredResult,
       season,
+      // All predictions (any game that was graded)
+      all_stats: {
+        total: allTotal,
+        wins: allWins,
+        losses: allLosses,
+        win_rate: allTotal > 0 ? allWins / allTotal : 0,
+        profit_units: allProfit,
+        roi: allRoi,
+      },
+      // Qualifying bets only (FAV or DOG strategy)
       stats: {
         total_bets: qualTotal,
         wins: qualWins,
@@ -329,6 +346,7 @@ export async function GET(request: Request) {
         profit_units: qualProfit,
         roi: qualRoi,
       },
+      // Edge >= 2.5 (for analysis)
       tracked_stats: {
         total_tracked: trackedTotal,
         wins: trackedWins,
